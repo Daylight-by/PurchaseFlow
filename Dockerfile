@@ -17,15 +17,15 @@ RUN dotnet publish src/PurchaseFlow.DbMigrator/PurchaseFlow.DbMigrator.csproj -c
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
-ENV ASPNETCORE_URLS=http://0.0.0.0:8080 \
-    ASPNETCORE_ENVIRONMENT=Production \
+ENV ASPNETCORE_ENVIRONMENT=Production \
     ASPNETCORE_FORWARDEDHEADERS_ENABLED=true
 EXPOSE 8080
 
-# Runtime-only overrides so the demo boots with an absolute SQLite path and a real
-# (throwaway) encryption passphrase. Each one can be overridden again on the container page.
-ENV ConnectionStrings__Default=Data Source=/app/web/PurchaseFlow.db; \
-    StringEncryption__DefaultPassPhrase=PurchaseFlow-Demo-Phrase-ChangeMe-1
+# Runtime-only overrides so the demo boots with a real (throwaway) encryption passphrase.
+# The SQLite connection string is NOT set here: SnapDeploy injects `PORT`, and the
+# connection string is supplied as a clean runtime environment variable on the container
+# page (ConnectionStrings__Default), so it cannot be mangled by Dockerfile parsing.
+ENV StringEncryption__DefaultPassPhrase=PurchaseFlow-Demo-Phrase-ChangeMe-1
 
 COPY --from=build /out/web ./web
 COPY --from=build /out/migrator ./migrator
@@ -42,4 +42,5 @@ ENV OpenIddict__CertificatePassword=PurchaseFlow-Demo-Cert-ChangeMe-1
 
 WORKDIR /app/web
 # Start with the database migrator, then launch the web host.
-CMD ["/bin/bash", "-c", "dotnet ../migrator/PurchaseFlow.DbMigrator.dll && dotnet PurchaseFlow.Web.dll"]
+# The web host binds to the port the platform injects via `PORT` (falls back to 8080).
+CMD ["/bin/bash", "-c", "export ASPNETCORE_URLS=http://0.0.0.0:${PORT:-8080}; dotnet ../migrator/PurchaseFlow.DbMigrator.dll && dotnet PurchaseFlow.Web.dll"]
