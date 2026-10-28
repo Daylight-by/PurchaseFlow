@@ -43,4 +43,6 @@ ENV OpenIddict__CertificatePassword=PurchaseFlow-Demo-Cert-ChangeMe-1
 WORKDIR /app/web
 # Start with the database migrator, then launch the web host.
 # The web host binds to the port the platform injects via `PORT` (falls back to 8080).
-CMD ["/bin/bash", "-c", "export ASPNETCORE_URLS=http://0.0.0.0:${PORT:-8080}; dotnet ../migrator/PurchaseFlow.DbMigrator.dll && dotnet PurchaseFlow.Web.dll"]
+# The migrator runs in the background so the web host starts listening immediately and
+# the platform health check passes; migrations finish shortly after startup.
+CMD ["/bin/bash", "-c", "export ASPNETCORE_URLS=http://0.0.0.0:${PORT:-8080}; (dotnet ../migrator/PurchaseFlow.DbMigrator.dll > /tmp/migrator.log 2>&1 &); dotnet PurchaseFlow.Web.dll"]
