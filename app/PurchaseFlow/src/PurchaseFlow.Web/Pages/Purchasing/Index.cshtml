@@ -1,0 +1,93 @@
+@page
+@model PurchaseFlow.Web.Pages.Purchasing.IndexModel
+@using PurchaseFlow.Purchasing
+@{
+    Layout = "/Pages/Shared/_PurchaseLayout.cshtml";
+    ViewData["Title"] = "采购需求";
+}
+
+<div class="pf-page">
+    <header class="pf-page-heading">
+        <div>
+            <span class="pf-eyebrow">PURCHASE REQUESTS</span>
+            <h1>每笔需求，都有一条决策路径。</h1>
+            <p>集中查看报价准备、审核进度与最终选择。</p>
+        </div>
+        <a class="btn btn-outline-secondary" href="/Guide"><i class="far fa-question-circle" aria-hidden="true"></i> 操作指南</a>
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(Model.Error))
+    {
+        <div class="alert alert-danger" role="alert">@Model.Error</div>
+    }
+
+    <div class="pf-summary-strip mb-4">
+        <a class="@(Model.Filter.Status is null ? "active" : "")" asp-page="/Purchasing/Index"><span>全部需求</span><strong>@Model.Result.AllCount</strong></a>
+        <a class="@(Model.Filter.Status == PurchaseRequestStatus.Draft ? "active" : "")" asp-page="/Purchasing/Index" asp-route-status="Draft"><span><i class="pf-stage-dot pf-stage-draft"></i>草稿</span><strong>@Model.Result.DraftCount</strong></a>
+        <a class="@(Model.Filter.Status == PurchaseRequestStatus.PendingReview ? "active" : "")" asp-page="/Purchasing/Index" asp-route-status="PendingReview"><span><i class="pf-stage-dot pf-stage-pendingreview"></i>待审核</span><strong>@Model.Result.PendingReviewCount</strong></a>
+        <a class="@(Model.Filter.Status == PurchaseRequestStatus.Returned ? "active" : "")" asp-page="/Purchasing/Index" asp-route-status="Returned"><span><i class="pf-stage-dot pf-stage-returned"></i>已退回</span><strong>@Model.Result.ReturnedCount</strong></a>
+        <a class="@(Model.Filter.Status == PurchaseRequestStatus.Approved ? "active" : "")" asp-page="/Purchasing/Index" asp-route-status="Approved"><span><i class="pf-stage-dot pf-stage-approved"></i>已批准</span><strong>@Model.Result.ApprovedCount</strong></a>
+    </div>
+
+    @if (Model.CanEdit)
+    {
+        <section class="pf-panel pf-create-panel mb-4" aria-labelledby="create-title" id="create-request">
+            <div class="pf-panel-heading"><div><span class="pf-section-kicker">NEW REQUEST</span><h2 id="create-title">创建采购需求</h2></div><span class="pf-hint">先建立需求，再补充供应商报价</span></div>
+            <form method="post" asp-page-handler="Create" class="row g-3 align-items-end">
+                <div class="col-md-3"><label class="form-label" for="orderReference">销售单号</label><input class="form-control" id="orderReference" name="orderReference" maxlength="64" placeholder="例如 SO-2026-001" required /></div>
+                <div class="col-md-5"><label class="form-label" for="description">需求说明</label><input class="form-control" id="description" name="description" maxlength="500" placeholder="简述本次采购内容" required /></div>
+                <div class="col-md-2"><label class="form-label" for="saleAmount">预计销售金额（元）</label><input class="form-control" id="saleAmount" name="saleAmount" type="number" min="0.01" step="0.01" placeholder="100000" required /></div>
+                <div class="col-md-2"><button class="btn pf-primary w-100" type="submit">创建需求 →</button></div>
+            </form>
+        </section>
+    }
+
+    <section class="pf-panel" aria-labelledby="list-title">
+        <div class="pf-panel-heading pf-list-heading"><div><span class="pf-section-kicker">REQUESTS</span><h2 id="list-title">需求列表 <small>@Model.Result.TotalCount 条</small></h2></div>
+            <form method="get" class="d-flex gap-2 pf-search">
+                @if (Model.Filter.Status.HasValue) { <input type="hidden" name="status" value="@Model.Filter.Status" /> }
+                <input class="form-control" type="search" name="keyword" value="@Model.Filter.Keyword" placeholder="搜索单号或需求说明" aria-label="搜索需求" />
+                <button class="btn btn-outline-secondary" type="submit">搜索</button>
+                @if (!string.IsNullOrWhiteSpace(Model.Filter.Keyword)) { <a class="btn btn-light" asp-page="/Purchasing/Index" asp-route-status="@Model.Filter.Status">清除</a> }
+            </form>
+        </div>
+        <div class="pf-tabs" aria-label="状态筛选">
+            <a asp-page="/Purchasing/Index" asp-route-keyword="@Model.Filter.Keyword" class="@(Model.Filter.Status is null ? "active" : "")">全部</a>
+            <a asp-page="/Purchasing/Index" asp-route-status="Draft" asp-route-keyword="@Model.Filter.Keyword" class="@(Model.Filter.Status == PurchaseRequestStatus.Draft ? "active" : "")">草稿</a>
+            <a asp-page="/Purchasing/Index" asp-route-status="PendingReview" asp-route-keyword="@Model.Filter.Keyword" class="@(Model.Filter.Status == PurchaseRequestStatus.PendingReview ? "active" : "")">待审核</a>
+            <a asp-page="/Purchasing/Index" asp-route-status="Returned" asp-route-keyword="@Model.Filter.Keyword" class="@(Model.Filter.Status == PurchaseRequestStatus.Returned ? "active" : "")">已退回 · @Model.Result.ReturnedCount</a>
+            <a asp-page="/Purchasing/Index" asp-route-status="Approved" asp-route-keyword="@Model.Filter.Keyword" class="@(Model.Filter.Status == PurchaseRequestStatus.Approved ? "active" : "")">已批准</a>
+        </div>
+        <div class="table-responsive">
+            <table class="table pf-table mb-0">
+                <thead><tr><th>销售单号 / 需求</th><th>预计销售金额</th><th>状态</th><th>创建时间</th><th class="text-end">操作</th></tr></thead>
+                <tbody>
+                @foreach (var item in Model.Result.Items)
+                {
+                    <tr>
+                        <td data-label="销售单号"><strong>@item.OrderReference</strong><span class="pf-row-subtitle">@item.Description</span></td>
+                        <td data-label="预计销售金额" class="pf-money">¥@item.SaleAmount.ToString("N2")</td>
+                        <td data-label="状态"><span class="pf-status pf-status-@item.Status.ToString().ToLowerInvariant()">@PurchaseFlow.Web.Pages.Purchasing.IndexModel.StatusText(item.Status)</span></td>
+                        <td data-label="创建时间" class="pf-muted">@item.CreationTime.ToString("yyyy-MM-dd HH:mm")</td>
+                        <td data-label="操作" class="text-end"><a class="pf-link" asp-page="/Purchasing/Details" asp-route-id="@item.Id">查看决策 →</a></td>
+                    </tr>
+                }
+                @if (Model.Result.Items.Count == 0)
+                {
+                    <tr><td colspan="5" class="pf-empty">没有符合条件的采购需求。可以更换筛选条件，或创建第一条需求。</td></tr>
+                }
+                </tbody>
+            </table>
+        </div>
+        @if (Model.TotalPages > 1)
+        {
+            <nav class="pf-pagination" aria-label="需求分页">
+                <span>第 @Model.Result.Page / @Model.TotalPages 页</span>
+                <div>
+                    @if (Model.Result.Page > 1) { <a asp-page="/Purchasing/Index" asp-route-keyword="@Model.Filter.Keyword" asp-route-status="@Model.Filter.Status" asp-route-pageNumber="@(Model.Result.Page - 1)">上一页</a> }
+                    @if (Model.Result.Page < Model.TotalPages) { <a asp-page="/Purchasing/Index" asp-route-keyword="@Model.Filter.Keyword" asp-route-status="@Model.Filter.Status" asp-route-pageNumber="@(Model.Result.Page + 1)">下一页</a> }
+                </div>
+            </nav>
+        }
+    </section>
+</div>

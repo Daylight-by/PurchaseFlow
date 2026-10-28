@@ -1,0 +1,59 @@
+@using Volo.Abp.Users
+@using Volo.Abp.AspNetCore.Mvc.UI.Theme.Basic.Bundling
+@inject ICurrentUser CurrentUser
+@{
+    Layout = null;
+    var path = Context.Request.Path.Value ?? "/";
+    var isHome = path == "/";
+    var isPurchasing = path.StartsWith("/Purchasing", StringComparison.OrdinalIgnoreCase);
+    var isGuide = path.StartsWith("/Guide", StringComparison.OrdinalIgnoreCase);
+    var roleName = CurrentUser.IsInRole("admin") ? "管理员" : CurrentUser.IsInRole("reviewer") ? "审核员" : CurrentUser.IsInRole("buyer") ? "采购员" : "工作台用户";
+}
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="~/images/purchaseflow-mark.svg" />
+    <title>@(ViewData["Title"] ?? "采购决策中心") · PurchaseFlow</title>
+    <abp-style-bundle name="@BasicThemeBundles.Styles.Global" />
+    <link rel="stylesheet" href="~/css/purchaseflow.css" asp-append-version="true" />
+    @await RenderSectionAsync("styles", required: false)
+</head>
+<body class="pf-workspace">
+    <a href="#main-content" class="pf-skip">跳到主要内容</a>
+    <div class="pf-mobile-overlay" data-nav-overlay></div>
+    <aside class="pf-sidebar" id="workspace-nav" aria-label="主导航">
+        <a class="pf-brand" href="/"><span class="pf-brand-mark" aria-hidden="true">p<span>f</span></span><span>PurchaseFlow<small>采购决策中心</small></span></a>
+        <div class="pf-nav-label">工作空间</div>
+        <nav class="pf-side-links">
+            <a href="/" class="@(isHome ? "active" : "")" aria-current="@(isHome ? "page" : null)"><i class="fas fa-chart-pie" aria-hidden="true"></i>业务概览<span>01</span></a>
+            <a href="/Purchasing/Index" class="@(isPurchasing ? "active" : "")" aria-current="@(isPurchasing ? "page" : null)"><i class="fas fa-layer-group" aria-hidden="true"></i>采购需求<span>02</span></a>
+            <a href="/Guide" class="@(isGuide ? "active" : "")" aria-current="@(isGuide ? "page" : null)"><i class="fas fa-compass" aria-hidden="true"></i>使用指南<span>03</span></a>
+        </nav>
+        @if (CurrentUser.IsInRole("admin"))
+        {
+            <div class="pf-nav-label mt-4">管理</div>
+            <nav class="pf-side-links"><a href="/Identity/Users"><i class="fas fa-users" aria-hidden="true"></i>用户与权限<i class="fas fa-external-link-alt pf-nav-external" aria-hidden="true"></i></a></nav>
+        }
+        <div class="pf-sidebar-bottom"><span class="pf-live-dot"></span> 本地演示工作空间<p>让选择依据与审核过程<br />在同一处清晰呈现。</p><span class="pf-build-tag">PURCHASEFLOW / 02</span></div>
+    </aside>
+    <div class="pf-workspace-main">
+        <header class="pf-topbar">
+            <div class="d-flex align-items-center gap-3"><button type="button" class="pf-menu-toggle" data-nav-toggle aria-label="展开主导航" aria-controls="workspace-nav" aria-expanded="false"><i class="fas fa-bars" aria-hidden="true"></i></button><span class="pf-topbar-crumb">工作空间 <span>/</span> <strong>@(ViewData["Title"] ?? "采购决策中心")</strong></span></div>
+            <div class="pf-topbar-right"><span class="pf-environment">演示环境</span>
+                @if (CurrentUser.IsAuthenticated)
+                {
+                    <details class="pf-account"><summary><span class="pf-avatar">@(CurrentUser.UserName is { Length: > 0 } name ? name[..1].ToUpperInvariant() : "U")</span><span>@CurrentUser.UserName<small>@roleName</small></span><i class="fas fa-chevron-down" aria-hidden="true"></i></summary><div><span>@roleName · 当前账号</span><a href="/Account/Logout">退出登录</a></div></details>
+                }
+                else { <a class="btn pf-primary btn-sm" href="/Account/Login?ReturnUrl=%2F">登录工作台</a> }
+            </div>
+        </header>
+        <main id="main-content" class="pf-main-content">@RenderBody()</main>
+        <footer class="pf-footer"><span>PurchaseFlow <span class="pf-footer-dot">·</span> 采购询价与审核</span><span>模拟业务规则 · 金额单位人民币</span></footer>
+    </div>
+    <abp-script-bundle name="@BasicThemeBundles.Scripts.Global" />
+    <script src="~/js/purchaseflow.js" asp-append-version="true" defer></script>
+    @await RenderSectionAsync("scripts", required: false)
+</body>
+</html>

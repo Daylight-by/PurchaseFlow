@@ -1,0 +1,13 @@
+.tools/
+**/bin/
+**/obj/
+**/node_modules/
+**/.vs/
+**/openiddict.pfx
+**/appsettings.secrets.json
+**/*.db
+**/*.db-shm
+**/*.db-wal
+*.user
+*.suo
+

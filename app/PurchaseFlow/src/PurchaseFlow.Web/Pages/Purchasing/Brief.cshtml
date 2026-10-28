@@ -1,0 +1,133 @@
+@page "{id:guid}"
+@model PurchaseFlow.Web.Pages.Purchasing.BriefModel
+@using System.Linq
+@using PurchaseFlow.Purchasing
+@{
+    Layout = null;
+    var request = Model.PurchaseRequest;
+    var statusText = PurchaseFlow.Web.Pages.Purchasing.IndexModel.StatusText(request.Status);
+    var selectedQuote = request.Quotes.FirstOrDefault(x => x.Id == request.SelectedQuoteId);
+    var decision = request.Decision;
+}
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>采购决策简报 · @request.OrderReference</title>
+    <link rel="stylesheet" href="~/css/purchaseflow-print.css" asp-append-version="true" />
+</head>
+<body class="pf-print-body">
+    <main class="pf-print-sheet">
+        <header class="pf-print-header">
+            <div>
+                <p class="pf-print-eyebrow">PURCHASEFLOW · 决策简报</p>
+                <h1>@request.OrderReference</h1>
+                <p class="pf-print-description">@request.Description</p>
+            </div>
+            <span class="pf-print-status">@statusText</span>
+        </header>
+
+        <div class="pf-print-actions" aria-label="简报操作">
+            <button type="button" onclick="window.print()">打印简报</button>
+            <a href="@Url.Page("/Purchasing/Details", new { id = request.Id })">返回决策详情</a>
+        </div>
+
+        <section class="pf-print-section" aria-labelledby="summary-title">
+            <h2 id="summary-title">一、决策摘要</h2>
+            <div class="pf-print-metrics">
+                <div><span>预计销售金额</span><strong>¥@request.SaleAmount.ToString("N2")</strong></div>
+                <div><span>选中采购额</span><strong>@(request.SelectedQuoteAmount.HasValue ? "¥" + request.SelectedQuoteAmount.Value.ToString("N2") : "待选择")</strong></div>
+                <div><span>预计毛利</span><strong>@(request.ExpectedGrossProfit.HasValue ? "¥" + request.ExpectedGrossProfit.Value.ToString("N2") : "待计算")</strong></div>
+                <div><span>预计毛利率</span><strong>@(decision.SelectedMarginPercent.HasValue ? decision.SelectedMarginPercent.Value.ToString("N2") + "%" : "待计算")</strong></div>
+            </div>
+            <dl class="pf-print-facts">
+                <dt>所选供应商</dt><dd>@(selectedQuote?.SupplierName ?? "尚未选择")</dd>
+                <dt>选择理由</dt><dd>@(string.IsNullOrWhiteSpace(request.SelectionReason) ? "未填写" : request.SelectionReason)</dd>
+                <dt>相对最低价</dt><dd>@(request.SelectedCostPremiumToLowest.HasValue ? (request.SelectedCostPremiumToLowest.Value == 0 ? "最低价" : "+ ¥" + request.SelectedCostPremiumToLowest.Value.ToString("N2")) : "暂无比较数据")</dd>
+                <dt>相对最低价交期差</dt><dd>@(request.SelectedDeliveryDaysComparedWithLowest.HasValue ? (request.SelectedDeliveryDaysComparedWithLowest.Value == 0 ? "相同" : request.SelectedDeliveryDaysComparedWithLowest.Value > 0 ? "延后 " + request.SelectedDeliveryDaysComparedWithLowest.Value + " 天" : "提前 " + (-request.SelectedDeliveryDaysComparedWithLowest.Value) + " 天") : "暂无比较数据")</dd>
+            </dl>
+        </section>
+
+        <section class="pf-print-section" aria-labelledby="checks-title">
+            <h2 id="checks-title">二、提交准备</h2>
+            @if (decision.Checks.Count > 0)
+            {
+                <ul class="pf-print-checks">
+                    @foreach (var check in decision.Checks)
+                    {
+                        <li class="@(check.IsComplete ? "pf-print-check-complete" : "pf-print-check-incomplete")"><span>@(check.IsComplete ? "✓" : "○")</span>@check.Label</li>
+                    }
+                </ul>
+            }
+            else
+            {
+                <p class="pf-print-muted">当前没有可展示的准备清单。</p>
+            }
+            @if (decision.Warnings.Count > 0)
+            {
+                <div class="pf-print-warnings"><strong>提示</strong>
+                    @foreach (var warning in decision.Warnings)
+                    {
+                        <div>• @warning.Message</div>
+                    }
+                </div>
+            }
+        </section>
+
+        <section class="pf-print-section" aria-labelledby="quotes-title">
+            <h2 id="quotes-title">三、全部报价比较</h2>
+            @if (request.Quotes.Count == 0)
+            {
+                <p class="pf-print-muted">尚无报价记录。</p>
+            }
+            else
+            {
+                <table class="pf-print-table">
+                    <thead><tr><th>供应商</th><th>采购报价</th><th>交付天数</th><th>预计毛利</th><th>相对最低价</th><th>状态</th><th>备注</th></tr></thead>
+                    <tbody>
+                    @foreach (var quote in request.Quotes)
+                    {
+                        var isSelected = request.SelectedQuoteId == quote.Id;
+                        var isCheapest = decision.CheapestQuoteIds.Contains(quote.Id) || quote.CostPremiumToLowest == 0;
+                        var isFastest = decision.FastestQuoteIds.Contains(quote.Id);
+                        <tr class="@(isSelected ? "pf-print-selected" : "")">
+                            <td>@quote.SupplierName</td>
+                            <td>¥@quote.Amount.ToString("N2")</td>
+                            <td>@quote.DeliveryDays</td>
+                            <td>¥@quote.ExpectedGrossProfit.ToString("N2")</td>
+                            <td>@(quote.CostPremiumToLowest == 0 ? "最低价" : "+ ¥" + quote.CostPremiumToLowest.ToString("N2"))</td>
+                            <td>@(isSelected ? "已选择" : "")@(isCheapest ? " 最低价" : "")@(isFastest ? " 最快交期" : "")</td>
+                            <td>@(string.IsNullOrWhiteSpace(quote.Note) ? "—" : quote.Note)</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            }
+            <p class="pf-print-boundary">金额边界：预计毛利按销售金额减采购报价计算，仅用于当前页面决策参考，不含税费、物流、人工或其他成本。</p>
+        </section>
+
+        <section class="pf-print-section" aria-labelledby="history-title">
+            <h2 id="history-title">四、历史与操作人</h2>
+            @if (request.History.Count == 0)
+            {
+                <p class="pf-print-muted">暂无操作记录。</p>
+            }
+            else
+            {
+                <table class="pf-print-table pf-print-history-table">
+                    <thead><tr><th>时间（服务器时间）</th><th>操作</th><th>操作人</th><th>备注</th></tr></thead>
+                    <tbody>
+                    @foreach (var item in request.History)
+                    {
+                        <tr><td>@item.OccurredAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm")</td><td>@PurchaseFlow.Web.Pages.Purchasing.DetailsModel.ActionText(item.Action)</td><td>@item.ActorName</td><td>@(string.IsNullOrWhiteSpace(item.Comment) ? "—" : item.Comment)</td></tr>
+                    }
+                    </tbody>
+                </table>
+            }
+        </section>
+
+        <footer class="pf-print-footer">此简报记录生成时的数据，生成时间：@DateTime.Now.ToString("yyyy-MM-dd HH:mm")。后续变更请以系统记录为准。规则与数据用于演示。</footer>
+    </main>
+</body>
+</html>

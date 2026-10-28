@@ -1,0 +1,35 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/PurchaseFlow.Application.Contracts/PurchaseFlow.Application.Contracts.csproj" />
+    <Project Path="src/PurchaseFlow.Application/PurchaseFlow.Application.csproj" />
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    <Project Path="src/PurchaseFlow.DbMigrator/PurchaseFlow.DbMigrator.csproj" />
+    <Project Path="src/PurchaseFlow.Domain.Shared/PurchaseFlow.Domain.Shared.csproj" />
+    <Project Path="src/PurchaseFlow.Domain/PurchaseFlow.Domain.csproj" />
+    <Project Path="src/PurchaseFlow.EntityFrameworkCore/PurchaseFlow.EntityFrameworkCore.csproj" />
+    <Project Path="src/PurchaseFlow.HttpApi.Client/PurchaseFlow.HttpApi.Client.csproj" />
+    
+    
+    <Project Path="src/PurchaseFlow.HttpApi/PurchaseFlow.HttpApi.csproj" />
+    
+    
+    <Project Path="src/PurchaseFlow.Web/PurchaseFlow.Web.csproj" />
+  </Folder>
+  <Folder Name="/test/">
+    <Project Path="test/PurchaseFlow.Application.Tests/PurchaseFlow.Application.Tests.csproj" />
+    <Project Path="test/PurchaseFlow.Domain.Tests/PurchaseFlow.Domain.Tests.csproj" />
+    <Project Path="test/PurchaseFlow.EntityFrameworkCore.Tests/PurchaseFlow.EntityFrameworkCore.Tests.csproj" />
+    <Project Path="test/PurchaseFlow.HttpApi.Client.ConsoleTestApp/PurchaseFlow.HttpApi.Client.ConsoleTestApp.csproj" />
+    
+    <Project Path="test/PurchaseFlow.TestBase/PurchaseFlow.TestBase.csproj" />
+    <Project Path="test/PurchaseFlow.Web.Tests/PurchaseFlow.Web.Tests.csproj" />
+  </Folder>
+</Solution>

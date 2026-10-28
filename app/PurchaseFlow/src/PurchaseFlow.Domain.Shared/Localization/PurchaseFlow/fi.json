@@ -1,0 +1,10 @@
+{
+  "culture": "fi",
+  "texts": {
+    "AppName": "PurchaseFlow",
+    "Menu:Home": "Koti",
+    "Welcome": "Tervetuloa",
+    "LongWelcomeMessage": "Tervetuloa sovellukseen. Tämä on ABP-kehykseen perustuva käynnistysprojekti. Lisätietoja on osoitteessa abp.io."
+  }
+}
+

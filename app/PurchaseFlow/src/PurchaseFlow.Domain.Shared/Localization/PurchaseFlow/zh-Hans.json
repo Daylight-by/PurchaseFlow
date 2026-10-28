@@ -1,0 +1,23 @@
+{
+  "culture": "zh-Hans",
+  "texts": {
+    "AppName": "PurchaseFlow",
+    "Menu:Home": "首页",
+    "Welcome": "欢迎",
+    "LongWelcomeMessage": "欢迎使用本应用程序。这是一个基于 ABP 框架的启动项目。更多信息，请访问 abp.io。",
+    "Menu:PurchaseRequests": "采购询价",
+    "Permission:Requests": "查看采购需求",
+    "Permission:EditRequests": "创建和编辑采购需求",
+    "Permission:ReviewRequests": "批准或退回采购需求",
+    "PurchaseFlow:NotEditable": "当前状态不允许编辑采购需求。",
+    "PurchaseFlow:InvalidStatus": "当前状态不允许执行此操作。",
+    "PurchaseFlow:NeedTwoQuotes": "提交前至少录入两条供应商报价。",
+    "PurchaseFlow:NeedSelectedQuote": "提交前请选择一条报价。",
+    "PurchaseFlow:NeedSelectionReason": "请填写选择该报价的理由。",
+    "PurchaseFlow:InvalidAmount": "金额必须大于零，交付天数不能小于零。",
+    "PurchaseFlow:NeedReviewComment": "请填写退回原因。",
+    "PurchaseFlow:DuplicateSupplier": "该供应商已有一条报价。",
+    "PurchaseFlow:DuplicateOrderReference": "该销售单号已有采购需求。"
+  }
+}
+

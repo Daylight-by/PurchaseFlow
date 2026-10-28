@@ -1,0 +1,72 @@
+@page { size: A4; margin: 16mm 15mm 15mm; }
+
+:root { color-scheme: light; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: #f1f2f3; color: #111; font-family: "Microsoft YaHei", "Noto Sans CJK SC", Arial, sans-serif; font-size: 13px; line-height: 1.55; }
+.pf-print-sheet { width: min(100%, 920px); margin: 28px auto; padding: 34px 40px 30px; background: #fff; box-shadow: 0 2px 12px rgba(0,0,0,.08); }
+.pf-print-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; padding-bottom: 20px; border-bottom: 2px solid #111; }
+.pf-print-eyebrow { margin: 0 0 5px; font-size: 10px; letter-spacing: .16em; font-weight: 700; }
+.pf-print-header h1 { margin: 0; font-size: 27px; line-height: 1.2; }
+.pf-print-description { margin: 7px 0 0; color: #444; }
+.pf-print-status { border: 1px solid #111; padding: 4px 12px; white-space: nowrap; font-weight: 700; }
+.pf-print-actions { display: flex; justify-content: flex-end; gap: 9px; padding: 14px 0 2px; }
+.pf-print-actions button, .pf-print-actions a { border: 1px solid #333; background: #fff; color: #111; padding: 6px 13px; text-decoration: none; font: inherit; cursor: pointer; }
+.pf-print-section { margin-top: 25px; break-inside: avoid; }
+.pf-print-section h2 { margin: 0 0 11px; padding-bottom: 6px; border-bottom: 1px solid #555; font-size: 16px; }
+.pf-print-metrics { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid #999; }
+.pf-print-metrics div { min-height: 70px; padding: 10px 12px; border-right: 1px solid #999; }
+.pf-print-metrics div:last-child { border-right: 0; }
+.pf-print-metrics span { display: block; color: #444; font-size: 11px; }
+.pf-print-metrics strong { display: block; margin-top: 5px; font-size: 16px; }
+.pf-print-facts { display: grid; grid-template-columns: 130px 1fr; margin: 14px 0 0; border-top: 1px solid #bbb; }
+.pf-print-facts dt, .pf-print-facts dd { margin: 0; padding: 7px 8px; border-bottom: 1px solid #ddd; }
+.pf-print-facts dt { font-weight: 700; background: #f4f4f4; }
+.pf-print-facts dd { min-width: 0; }
+.pf-print-checks { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px 20px; padding: 0; margin: 0; list-style: none; }
+.pf-print-checks li span { display: inline-block; width: 18px; font-weight: 700; }
+.pf-print-check-complete span { color: #111; }
+.pf-print-check-incomplete { color: #555; }
+.pf-print-warnings { margin-top: 12px; border-left: 3px solid #333; padding: 8px 11px; background: #f5f5f5; }
+.pf-print-warnings strong { display: block; margin-bottom: 3px; }
+.pf-print-table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.pf-print-table th, .pf-print-table td { padding: 7px 7px; border: 1px solid #999; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.pf-print-table th { background: #ededed; font-size: 11px; }
+.pf-print-table th:nth-child(1) { width: 17%; }
+.pf-print-table th:nth-child(2) { width: 13%; }
+.pf-print-table th:nth-child(3) { width: 10%; }
+.pf-print-table th:nth-child(4) { width: 13%; }
+.pf-print-table th:nth-child(5) { width: 15%; }
+.pf-print-table th:nth-child(6) { width: 15%; }
+.pf-print-table th:nth-child(7) { width: 17%; }
+.pf-print-selected td { font-weight: 700; background: #ededed; }
+.pf-print-boundary, .pf-print-muted { color: #444; }
+.pf-print-boundary { margin: 10px 0 0; font-size: 11px; }
+.pf-print-history-table th:nth-child(1) { width: 23%; }
+.pf-print-history-table th:nth-child(2) { width: 18%; }
+.pf-print-history-table th:nth-child(3) { width: 20%; }
+.pf-print-history-table th:nth-child(4) { width: 39%; }
+.pf-print-footer { margin-top: 28px; padding-top: 10px; border-top: 1px solid #555; color: #444; font-size: 10px; }
+
+@media (max-width: 720px) {
+    .pf-print-sheet { margin: 0; padding: 22px 18px; width: 100%; box-shadow: none; }
+    .pf-print-metrics { grid-template-columns: repeat(2, 1fr); }
+    .pf-print-metrics div:nth-child(2) { border-right: 0; }
+    .pf-print-metrics div:nth-child(-n+2) { border-bottom: 1px solid #999; }
+    .pf-print-checks { grid-template-columns: 1fr; }
+    .pf-print-table { font-size: 11px; }
+}
+
+@media print {
+    html, body { background: #fff; font-size: 11.5px; line-height: 1.4; }
+    .pf-print-sheet { width: 100%; margin: 0; padding: 0; box-shadow: none; }
+    .pf-print-actions { display: none; }
+    .pf-print-header { padding-bottom: 12px; }
+    .pf-print-section { margin-top: 16px; break-inside: auto; }
+    .pf-print-section h2 { margin-bottom: 8px; font-size: 15px; break-after: avoid; }
+    .pf-print-metrics div { min-height: 58px; padding: 8px 10px; }
+    .pf-print-facts dt, .pf-print-facts dd { padding: 5px 8px; }
+    .pf-print-table th, .pf-print-table td { padding: 5px 6px; }
+    .pf-print-table thead { display: table-header-group; }
+    .pf-print-table tr { break-inside: avoid; }
+    .pf-print-footer { margin-top: 18px; break-inside: avoid; }
+}

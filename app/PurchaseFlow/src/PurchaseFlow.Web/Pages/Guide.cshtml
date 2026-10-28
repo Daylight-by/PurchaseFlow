@@ -1,0 +1,11 @@
+@page
+@model PurchaseFlow.Web.Pages.GuideModel
+@{
+    Layout = "/Pages/Shared/_PurchaseLayout.cshtml";
+    ViewData["Title"] = "使用指南";
+}
+<div class="pf-page"><header class="pf-page-heading"><div><span class="pf-eyebrow">GETTING STARTED</span><h1>从第一笔需求开始。</h1><p>用一个完整的例子，理解采购、比较、审核和留痕。</p></div><a href="/Purchasing/Index" class="btn pf-primary">进入工作台 →</a></header>
+<div class="pf-guide-grid"><section class="pf-panel"><span class="pf-section-kicker">WORKFLOW</span><h2 class="mt-2 mb-4">一条完整的操作路径</h2><ol class="pf-guide-steps"><li><span>01</span><div><h3>建立需求</h3><p>填写一个不重复的销售单号、需求说明和预计销售金额。练习时可以填 100,000 元。</p></div></li><li><span>02</span><div><h3>录入两家报价</h3><p>A 报价 82,000 元、10 天交付；B 报价 86,000 元、5 天交付。所有报价由人录入。</p></div></li><li><span>03</span><div><h3>比较并说明选择</h3><p>试着调整价格与交期权重。若选 B，填写“多花 4,000 元，交付提前 5 天”。实验台不自动选中方案。</p></div></li><li><span>04</span><div><h3>提交与审核</h3><p>采购员提交后，审核员可以批准或填写原因退回。退回可修改重提，批准后内容冻结。</p></div></li><li><span>05</span><div><h3>查看记录与简报</h3><p>核对每次操作的账号、时间和意见。打开“决策简报”打印或通过浏览器另存为 PDF。</p></div></li></ol></section>
+<div><section class="pf-panel mb-4"><span class="pf-section-kicker">ROLES</span><h2 class="mt-2">谁可以做什么</h2><div class="pf-role-row"><span class="pf-avatar">采</span><div><strong>采购员</strong><p>编辑自己创建的草稿与退回需求，录入报价并提交。</p></div></div><div class="pf-role-row"><span class="pf-avatar pf-avatar-review">审</span><div><strong>审核员</strong><p>审核待审核需求。审核权限不包含编辑采购报价。</p></div></div><p class="pf-muted mb-0">首次用管理员创建自己的需求，可在同一账号下走完流程；展示权限时请分别使用两个角色。</p></section>
+<section class="pf-panel"><span class="pf-section-kicker">CALCULATION</span><h2 class="mt-2">看懂数字与评分</h2><p>预计毛利 = 销售金额 − 所选采购报价。</p><p>毛利率 = 预计毛利 ÷ 销售金额 × 100%。未计税费、运费和其他成本。</p><p>实验台在当前报价集合内，将成本和交期各自归一为 0～100 分，再按你调整的权重加总。全部相同的指标均记 100 分。新增报价可能改变相对评分。</p><p class="pf-muted mb-0">评分未包含质量、信用、服务或合同条件，仅帮助比较取舍；最终方案由人选择，审核也由人完成。</p></section></div></div>
+<section class="pf-panel mt-4"><div class="pf-panel-heading"><h2>遇到问题时</h2></div><div class="pf-faq-grid"><div><h3>网页打不开</h3><p>使用完整地址 https://localhost:44345/；启动后保留服务窗口。重复双击入口会复用已运行的项目。</p></div><div><h3>无法编辑需求</h3><p>检查是否本人创建，且状态为草稿或已退回。待审核和已批准不允许修改。</p></div><div><h3>提示方案存在劣势</h3><p>说明另一报价在价格和交期上都不更差。这是比较提醒；质量或服务差异应写入选择理由。</p></div></div></section></div>

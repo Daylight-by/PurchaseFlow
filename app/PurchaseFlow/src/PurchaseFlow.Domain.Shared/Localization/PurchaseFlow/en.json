@@ -1,0 +1,23 @@
+{
+  "culture": "en",
+  "texts": {
+    "AppName": "PurchaseFlow",
+    "Menu:Home": "Home",
+    "Welcome": "Welcome",
+    "LongWelcomeMessage": "Welcome to the application. This is a startup project based on the ABP framework. For more information, visit abp.io.",
+    "Menu:PurchaseRequests": "Purchase requests",
+    "Permission:Requests": "View purchase requests",
+    "Permission:EditRequests": "Create and edit purchase requests",
+    "Permission:ReviewRequests": "Approve or return purchase requests",
+    "PurchaseFlow:NotEditable": "This purchase request cannot be edited in its current state.",
+    "PurchaseFlow:InvalidStatus": "This action is not allowed in the current state.",
+    "PurchaseFlow:NeedTwoQuotes": "Add at least two supplier quotes before submitting.",
+    "PurchaseFlow:NeedSelectedQuote": "Select a supplier quote before submitting.",
+    "PurchaseFlow:NeedSelectionReason": "Explain why this quote was selected.",
+    "PurchaseFlow:InvalidAmount": "Amounts must be positive and delivery days cannot be negative.",
+    "PurchaseFlow:NeedReviewComment": "Explain why the request was returned.",
+    "PurchaseFlow:DuplicateSupplier": "This supplier already has a quote on the request.",
+    "PurchaseFlow:DuplicateOrderReference": "This sales order reference already has a purchase request."
+  }
+}
+

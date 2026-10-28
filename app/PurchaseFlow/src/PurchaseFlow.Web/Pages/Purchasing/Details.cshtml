@@ -1,0 +1,261 @@
+@page "{id:guid}"
+@model PurchaseFlow.Web.Pages.Purchasing.DetailsModel
+@using System.Linq
+@using PurchaseFlow.Purchasing
+
+@{
+    Layout = "/Pages/Shared/_PurchaseLayout.cshtml";
+    var statusText = PurchaseFlow.Web.Pages.Purchasing.IndexModel.StatusText(Model.PurchaseRequest.Status);
+    var selectedQuote = Model.PurchaseRequest.Quotes.FirstOrDefault(x => x.Id == Model.PurchaseRequest.SelectedQuoteId);
+    var decision = Model.PurchaseRequest.Decision;
+    var currentStatus = Model.PurchaseRequest.Status.ToString().ToLowerInvariant();
+    var selectedMargin = decision.SelectedMarginPercent;
+    ViewData["Title"] = "决策详情";
+}
+
+<div class="pf-page pf-detail-page">
+    <nav class="pf-breadcrumb" aria-label="面包屑">
+        <a class="pf-link" asp-page="/Purchasing/Index">采购需求</a>
+        <span aria-hidden="true">/</span>
+        <span>决策详情</span>
+    </nav>
+
+    <header class="pf-detail-hero pf-detail-hero-modern mt-3 mb-4">
+        <div class="pf-detail-heading">
+            <span class="pf-section-kicker">PURCHASE REQUEST · 决策页</span>
+            <h1>@Model.PurchaseRequest.OrderReference</h1>
+            <p class="pf-detail-description">@Model.PurchaseRequest.Description</p>
+            <div class="pf-detail-meta">
+                <span>销售金额 <strong>¥@Model.PurchaseRequest.SaleAmount.ToString("N2")</strong></span>
+                <span>创建于 @Model.PurchaseRequest.CreationTime.ToString("yyyy-MM-dd HH:mm")</span>
+            </div>
+        </div>
+        <div class="pf-detail-actions">
+            <span class="pf-status pf-status-@currentStatus">@statusText</span>
+            <a class="pf-button pf-button-secondary" asp-page="/Purchasing/Brief" asp-route-id="@Model.PurchaseRequest.Id">查看决策简报</a>
+        </div>
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(Model.Error))
+    {
+        <div class="alert alert-danger pf-alert" role="alert">@Model.Error</div>
+    }
+
+    <section class="pf-panel pf-progress-panel mb-4" aria-labelledby="progress-title">
+        <div class="pf-panel-heading">
+            <div><span class="pf-section-kicker">WORKFLOW</span><h2 id="progress-title">流程进度</h2></div>
+            <span class="pf-hint">当前状态：@statusText</span>
+        </div>
+        <ol class="pf-progress" aria-label="采购审批流程">
+            <li class="@(Model.PurchaseRequest.Status is PurchaseRequestStatus.Draft or PurchaseRequestStatus.Returned ? "pf-progress-current" : "pf-progress-done")"><span class="pf-progress-index">1</span><strong>草稿</strong><small>建立需求与报价</small></li>
+            <li class="@(Model.PurchaseRequest.Status == PurchaseRequestStatus.PendingReview ? "pf-progress-current" : Model.PurchaseRequest.Status == PurchaseRequestStatus.Approved ? "pf-progress-done" : "")"><span class="pf-progress-index">2</span><strong>待审核</strong><small>提交决策依据</small></li>
+            <li class="@(Model.PurchaseRequest.Status == PurchaseRequestStatus.Approved ? "pf-progress-current pf-progress-done" : "")"><span class="pf-progress-index">3</span><strong>已批准</strong><small>方案进入已批准状态</small></li>
+        </ol>
+        @if (Model.PurchaseRequest.Status == PurchaseRequestStatus.Returned)
+        {
+            <p class="pf-progress-note">已退回，补充后重新提交</p>
+        }
+    </section>
+
+    <section class="pf-panel pf-decision-overview mb-4" aria-labelledby="decision-title">
+        <div class="pf-panel-heading">
+            <div><span class="pf-section-kicker">DECISION SNAPSHOT</span><h2 id="decision-title">决策概览</h2></div>
+            <span class="pf-hint">毛利 = 销售金额 − 选中采购报价；不含税费、物流及其他成本</span>
+        </div>
+        <div class="pf-metric-grid">
+            <div class="pf-metric"><span>预计销售金额</span><strong>¥@Model.PurchaseRequest.SaleAmount.ToString("N2")</strong><small>需求中录入的销售金额</small></div>
+            <div class="pf-metric"><span>选中采购额</span><strong>@(Model.PurchaseRequest.SelectedQuoteAmount.HasValue ? "¥" + Model.PurchaseRequest.SelectedQuoteAmount.Value.ToString("N2") : "待选择")</strong><small>@(selectedQuote?.SupplierName ?? "尚未选定供应商")</small></div>
+            <div class="pf-metric @(Model.PurchaseRequest.ExpectedGrossProfit < 0 ? "pf-metric-negative" : "pf-metric-accent")"><span>预计毛利</span><strong>@(Model.PurchaseRequest.ExpectedGrossProfit.HasValue ? "¥" + Model.PurchaseRequest.ExpectedGrossProfit.Value.ToString("N2") : "待计算")</strong><small>当前选择的方案</small></div>
+            <div class="pf-metric @(selectedMargin < 0 ? "pf-metric-negative" : "")"><span>预计毛利率</span><strong>@(selectedMargin.HasValue ? selectedMargin.Value.ToString("N2") + "%" : "待计算")</strong><small>预计毛利 ÷ 销售金额</small></div>
+        </div>
+
+        @if (selectedQuote is not null)
+        {
+            <div class="pf-decision-note mt-3">
+                <div class="pf-decision-note-title"><strong>当前选择：@selectedQuote.SupplierName</strong><span class="pf-status pf-status-approved">已选方案</span></div>
+                <p class="mb-1">选择理由：@(string.IsNullOrWhiteSpace(Model.PurchaseRequest.SelectionReason) ? "未填写" : Model.PurchaseRequest.SelectionReason)</p>
+                @if (Model.PurchaseRequest.SelectedCostPremiumToLowest.HasValue)
+                {
+                    <p class="pf-muted mb-0">
+                        相对最低价 @(Model.PurchaseRequest.SelectedCostPremiumToLowest.Value == 0 ? "持平" : "高 ¥" + Model.PurchaseRequest.SelectedCostPremiumToLowest.Value.ToString("N2"))；
+                        @if (Model.PurchaseRequest.SelectedDeliveryDaysComparedWithLowest.HasValue && Model.PurchaseRequest.SelectedDeliveryDaysComparedWithLowest.Value < 0)
+                        {
+                            <span>交付提前 @(-Model.PurchaseRequest.SelectedDeliveryDaysComparedWithLowest.Value) 天。</span>
+                        }
+                        else if (Model.PurchaseRequest.SelectedDeliveryDaysComparedWithLowest.HasValue && Model.PurchaseRequest.SelectedDeliveryDaysComparedWithLowest.Value > 0)
+                        {
+                            <span>交付延后 @Model.PurchaseRequest.SelectedDeliveryDaysComparedWithLowest.Value 天。</span>
+                        }
+                        else
+                        {
+                            <span>交付天数相同。</span>
+                        }
+                    </p>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="pf-empty-state pf-empty-state-compact"><strong>尚未选定供应商</strong><span>先录入报价，再填写选择理由并选定方案。</span></div>
+        }
+    </section>
+
+    <section class="pf-panel pf-readiness mb-4" aria-labelledby="readiness-title">
+        <div class="pf-panel-heading">
+            <div><span class="pf-section-kicker">SUBMISSION CHECK</span><h2 id="readiness-title">提交准备清单</h2></div>
+            <div class="pf-readiness-heading"><span class="pf-readiness-state @(decision.IsReadyToSubmit ? "pf-ready" : "pf-not-ready")">@(decision.IsReadyToSubmit ? "报价与理由已齐备" : "仍需补充信息")</span><span class="pf-hint">是否可提交还取决于当前状态与操作权限</span></div>
+        </div>
+        @if (decision.Checks.Count > 0)
+        {
+            <div class="pf-check-list">
+                @foreach (var check in decision.Checks)
+                {
+                    <div class="pf-check-item @(check.IsComplete ? "pf-check-complete" : "pf-check-incomplete")"><span class="pf-check-icon" aria-hidden="true">@(check.IsComplete ? "✓" : "○")</span><span>@check.Label</span></div>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="pf-empty-state pf-empty-state-compact"><span>当前没有可展示的准备清单。</span></div>
+        }
+        @if (decision.Warnings.Count > 0)
+        {
+            <div class="pf-warning-list" role="status"><strong>需要留意</strong>
+                @foreach (var warning in decision.Warnings)
+                {
+                    <div class="pf-warning-item"><span aria-hidden="true">!</span>@warning.Message</div>
+                }
+                <small>这些比较提示供审核参考，请在选择理由中补充质量或服务差异。</small>
+            </div>
+        }
+    </section>
+
+    <section class="pf-panel mb-4" aria-labelledby="quotes-title">
+        <div class="pf-panel-heading"><div><span class="pf-section-kicker">QUOTATION COMPARISON</span><h2 id="quotes-title">报价比较 <small>@Model.PurchaseRequest.Quotes.Count 家供应商</small></h2></div><span class="pf-hint">最低价、最快交期和已选方案均已标记</span></div>
+        @if (Model.PurchaseRequest.Quotes.Count == 0)
+        {
+            <div class="pf-empty-state"><strong>还没有供应商报价</strong><span>录入至少两家报价，才能比较不同采购方案。</span></div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table pf-table pf-quote-table align-middle mb-0">
+                    <thead><tr><th>供应商 / 备注</th><th>采购报价</th><th>交付</th><th>预计毛利</th><th>相对最低价</th><th>方案标签</th><th>操作</th></tr></thead>
+                    <tbody>
+                    @foreach (var quote in Model.PurchaseRequest.Quotes)
+                    {
+                        var isSelected = Model.PurchaseRequest.SelectedQuoteId == quote.Id;
+                        var isCheapest = decision.CheapestQuoteIds.Contains(quote.Id) || quote.CostPremiumToLowest == 0;
+                        var isFastest = decision.FastestQuoteIds.Contains(quote.Id);
+                        var isDominated = decision.DominatedQuoteIds.Contains(quote.Id);
+                        <tr class="@(isSelected ? "pf-quote-selected" : "") @(isDominated ? "pf-quote-dominated" : "")">
+                            <td data-label="供应商 / 备注"><strong>@quote.SupplierName</strong><span class="pf-row-subtitle">@(string.IsNullOrWhiteSpace(quote.Note) ? "无补充说明" : quote.Note)</span></td>
+                            <td data-label="采购报价" class="pf-money">¥@quote.Amount.ToString("N2")</td>
+                            <td data-label="交付">@quote.DeliveryDays 天</td>
+                            <td data-label="预计毛利" class="pf-money @(quote.ExpectedGrossProfit < 0 ? "pf-money-negative" : "")">¥@quote.ExpectedGrossProfit.ToString("N2")</td>
+                            <td data-label="相对最低价" class="pf-muted">@(quote.CostPremiumToLowest == 0 ? "最低价" : "+ ¥" + quote.CostPremiumToLowest.ToString("N2"))</td>
+                            <td data-label="方案标签"><div class="pf-quote-tags">
+                                @if (isSelected) { <span class="pf-quote-tag pf-quote-tag-selected">已选择</span> }
+                                @if (isCheapest) { <span class="pf-quote-tag pf-quote-tag-cheapest">最低价</span> }
+                                @if (isFastest) { <span class="pf-quote-tag pf-quote-tag-fastest">最快交期</span> }
+                                @if (isDominated) { <span class="pf-quote-tag pf-quote-tag-muted">价期均不占优</span> }
+                            </div></td>
+                            <td data-label="操作" class="@( !Model.CanEdit && !isSelected ? "pf-empty-action" : "")">
+                                @if (Model.CanEdit)
+                                {
+                                    <form method="post" asp-page-handler="Select" asp-route-id="@Model.PurchaseRequest.Id" class="pf-quote-select-form">
+                                        <input type="hidden" name="quoteId" value="@quote.Id" />
+                                        <input class="form-control form-control-sm" name="reason" aria-label="选择 @quote.SupplierName 的理由" placeholder="选择理由" value="@(isSelected ? Model.PurchaseRequest.SelectionReason : "")" maxlength="500" required />
+                                        <button class="btn btn-sm btn-outline-primary" type="submit">@(isSelected ? "更新理由" : "选择")</button>
+                                    </form>
+                                    <form method="post" asp-page-handler="DeleteQuote" asp-route-id="@Model.PurchaseRequest.Id" class="pf-quote-delete-form"><input type="hidden" name="quoteId" value="@quote.Id" /><button class="btn btn-sm btn-link text-danger p-0" type="submit">删除报价</button></form>
+                                }
+                                else if (isSelected)
+                                {
+                                    <span class="pf-status pf-status-approved">已选择</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+        }
+        @if (Model.CanEdit)
+        {
+            <form method="post" asp-page-handler="AddQuote" asp-route-id="@Model.PurchaseRequest.Id" class="pf-add-quote-form row g-2 align-items-end mt-3">
+                <div class="col-md-3"><label class="form-label" for="supplierName">供应商</label><input class="form-control" id="supplierName" name="supplierName" placeholder="供应商名称" maxlength="100" required /></div>
+                <div class="col-md-2"><label class="form-label" for="amount">采购金额（元）</label><input class="form-control" id="amount" name="amount" type="number" min="0.01" step="0.01" required /></div>
+                <div class="col-md-2"><label class="form-label" for="deliveryDays">交付天数</label><input class="form-control" id="deliveryDays" name="deliveryDays" type="number" min="0" required /></div>
+                <div class="col-md-3"><label class="form-label" for="note">备注</label><input class="form-control" id="note" name="note" maxlength="500" placeholder="服务或条款差异" /></div>
+                <div class="col-md-2"><button class="btn btn-outline-primary w-100" type="submit">添加报价</button></div>
+            </form>
+        }
+    </section>
+
+    <section class="pf-panel pf-decision-lab mb-4" data-decision-lab aria-labelledby="decision-lab-title">
+        <div class="pf-panel-heading"><div><span class="pf-section-kicker">DECISION LAB</span><h2 id="decision-lab-title">决策实验台</h2></div><span class="pf-hint">调整比较偏好，不会改变已选方案</span></div>
+        <p class="pf-lab-intro">拖动权重，观察价格和交期如何影响相对评分。分数只反映当前报价集合的相对位置，不能替代业务判断。</p>
+        <div class="pf-lab-controls">
+            <label class="pf-lab-slider-label" for="decision-lab-price-weight"><span>价格权重 <strong data-lab-price-weight-value>70</strong>%</span><input id="decision-lab-price-weight" type="range" min="0" max="100" value="70" data-lab-price-weight /></label>
+            <span class="pf-lab-weight-separator" aria-hidden="true">+</span>
+            <div class="pf-lab-delivery-weight">交期权重 <strong data-lab-delivery-weight-value>30</strong>%</div>
+            <button class="btn btn-sm btn-outline-secondary" type="button" data-lab-reset>恢复 70 / 30</button>
+        </div>
+        <div class="pf-lab-quotes" aria-hidden="true">
+            @foreach (var quote in Model.PurchaseRequest.Quotes)
+            {
+                <span hidden data-lab-quote data-quote-id="@quote.Id" data-amount="@quote.Amount.ToString(System.Globalization.CultureInfo.InvariantCulture)" data-days="@quote.DeliveryDays" data-supplier="@quote.SupplierName"></span>
+            }
+        </div>
+        <div class="pf-lab-results" data-lab-results aria-live="polite">
+            @if (Model.PurchaseRequest.Quotes.Count < 2)
+            {
+                <div class="pf-empty-state pf-empty-state-compact"><strong>还不能进行有意义的相对比较</strong><span>请先录入至少两家供应商方案，实验台会按当前报价计算相对成本与交期分数。</span></div>
+            }
+            else
+            {
+                <div class="pf-lab-placeholder">正在根据报价计算方案评分…</div>
+            }
+        </div>
+        <noscript><p class="pf-no-script">启用 JavaScript 后可以调整权重；报价表、选择与审核功能仍可使用。</p></noscript>
+    </section>
+
+    @if (Model.CanEdit)
+    {
+        <details class="pf-panel pf-edit-details mb-4" open>
+            <summary><span><span class="pf-section-kicker">REQUEST DETAILS</span><strong>编辑采购需求</strong></span><span class="pf-hint">仅草稿或已退回需求可以修改</span></summary>
+            <form method="post" asp-page-handler="Update" asp-route-id="@Model.PurchaseRequest.Id" class="row g-3 align-items-end pf-edit-form">
+                <div class="col-md-3"><label class="form-label" for="orderReference">销售单号</label><input class="form-control" id="orderReference" name="orderReference" value="@Model.PurchaseRequest.OrderReference" maxlength="64" required /></div>
+                <div class="col-md-5"><label class="form-label" for="description">需求说明</label><input class="form-control" id="description" name="description" value="@Model.PurchaseRequest.Description" maxlength="500" required /></div>
+                <div class="col-md-2"><label class="form-label" for="saleAmount">销售金额（元）</label><input class="form-control" id="saleAmount" name="saleAmount" type="number" min="0.01" step="0.01" value="@Model.PurchaseRequest.SaleAmount" required /></div>
+                <div class="col-md-2"><button class="btn btn-outline-secondary w-100" type="submit">保存修改</button></div>
+            </form>
+        </details>
+    }
+
+    @if (Model.CanEdit)
+    {
+        <section class="pf-panel pf-submit-panel mb-4" aria-labelledby="submit-title"><div><span class="pf-section-kicker">NEXT ACTION</span><h2 id="submit-title">提交审核</h2><p class="pf-muted mb-0">确认报价和选择理由后提交。提交后内容将锁定，等待审核。</p></div><form method="post" asp-page-handler="Submit" asp-route-id="@Model.PurchaseRequest.Id"><button class="btn pf-primary" type="submit">提交审核 →</button></form></section>
+    }
+
+    @if (Model.CanReview)
+    {
+        <section class="pf-panel mb-4" aria-labelledby="review-title">
+            <div class="pf-panel-heading"><div><span class="pf-section-kicker">REVIEW</span><h2 id="review-title">审核决策</h2></div><span class="pf-hint">核对报价、交期、选价理由和预计毛利</span></div>
+            <form method="post" asp-page-handler="Approve" asp-route-id="@Model.PurchaseRequest.Id" class="row g-2 mb-3"><div class="col-md-9"><input class="form-control" name="comment" aria-label="批准意见" placeholder="批准意见（可选）" maxlength="500" /></div><div class="col-md-3"><button class="btn btn-success w-100" type="submit">批准需求</button></div></form>
+            <form method="post" asp-page-handler="Return" asp-route-id="@Model.PurchaseRequest.Id" class="row g-2"><div class="col-md-9"><input class="form-control" name="comment" aria-label="退回原因" placeholder="退回原因（必填）" maxlength="500" required /></div><div class="col-md-3"><button class="btn btn-outline-danger w-100" type="submit">退回修改</button></div></form>
+        </section>
+    }
+
+    <section class="pf-panel" aria-labelledby="history-title">
+        <div class="pf-panel-heading"><div><span class="pf-section-kicker">AUDIT TRAIL</span><h2 id="history-title">操作时间线</h2></div><span class="pf-hint">时间按服务器所在地时区显示</span></div>
+        <ol class="pf-timeline">
+            @foreach (var item in Model.PurchaseRequest.History)
+            {
+                <li><time datetime="@item.OccurredAtUtc.ToString("O")">@item.OccurredAtUtc.ToLocalTime().ToString("MM-dd HH:mm")</time><div><strong>@PurchaseFlow.Web.Pages.Purchasing.DetailsModel.ActionText(item.Action)</strong><p>@item.Comment</p><small class="pf-muted">操作人：@item.ActorName</small></div></li>
+            }
+            @if (Model.PurchaseRequest.History.Count == 0) { <li><span class="pf-muted">暂无操作记录</span></li> }
+        </ol>
+    </section>
+</div>

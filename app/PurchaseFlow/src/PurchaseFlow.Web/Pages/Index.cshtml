@@ -1,0 +1,41 @@
+@page
+@model PurchaseFlow.Web.Pages.IndexModel
+@using PurchaseFlow.Purchasing
+@using PurchaseFlow.Web.Pages.Purchasing
+@{
+    Layout = "/Pages/Shared/_PurchaseLayout.cshtml";
+    ViewData["Title"] = "业务概览";
+    var dashboard = Model.Dashboard;
+}
+<div class="pf-page pf-dashboard">
+    <header class="pf-page-heading"><div><span class="pf-eyebrow">OVERVIEW</span><h1>把每一次采购，落到清楚的决策。</h1><p>先看待办，再比较方案。报价、选择依据与审核结果始终关联。</p></div><a href="/Purchasing/Index#create-request" class="btn pf-primary"><i class="fas fa-plus" aria-hidden="true"></i> 进入采购工作台</a></header>
+    @if (dashboard is null)
+    {
+        <section class="pf-welcome-banner"><div><span class="pf-section-kicker">PURCHASEFLOW / 02</span><h2>从询价到审核，<br />看懂每一笔采购的取舍。</h2><p>把成本与交期放在一起比较，用选择理由解释方案，用操作记录保留过程。</p><a class="btn pf-primary" href="/Account/Login?ReturnUrl=%2F">@(Model.IsSignedIn ? "切换有工作台权限的账号" : "登录并开始体验") →</a><a class="pf-quiet-link" href="/Guide">先了解如何使用</a></div><div class="pf-flow-preview"><div><span>01</span><strong>询价与比较</strong><small>同一需求，多家供应商</small></div><div><span>02</span><strong>选择与说明</strong><small>价格、交期与成本差额</small></div><div><span>03</span><strong>审核与留痕</strong><small>批准冻结，退回可重提</small></div></div></section>
+        <div class="pf-feature-grid"><section class="pf-panel"><i class="fas fa-sliders-h pf-feature-icon" aria-hidden="true"></i><h2>比较决策偏好</h2><p>调整价格与交期的权重，观察方案排序如何变化。</p></section><section class="pf-panel"><i class="fas fa-clipboard-check pf-feature-icon" aria-hidden="true"></i><h2>在审核前补齐依据</h2><p>提交准备清单和成本提示，帮助核对方案。</p></section><section class="pf-panel"><i class="fas fa-print pf-feature-icon" aria-hidden="true"></i><h2>带走一份决策简报</h2><p>在独立简报中查看报价、理由和审核记录，并打印。</p></section></div>
+    }
+    else
+    {
+        <div class="pf-kpi-grid">
+            <a class="pf-kpi" href="/Purchasing/Index"><span>采购需求总数<i class="fas fa-layer-group" aria-hidden="true"></i></span><strong>@dashboard.TotalCount<small>笔</small></strong><p>共有 @dashboard.TotalQuoteCount 条供应商报价</p></a>
+            <a class="pf-kpi pf-kpi-attention" href="/Purchasing/Index?status=PendingReview"><span>等待审核<i class="far fa-clock" aria-hidden="true"></i></span><strong>@dashboard.PendingReviewCount<small>笔</small></strong><p>@dashboard.ReturnedCount 笔已退回，等待完善</p></a>
+            <div class="pf-kpi"><span>已批准采购金额<i class="fas fa-wallet" aria-hidden="true"></i></span><strong class="pf-kpi-money">¥@dashboard.ApprovedPurchaseAmount.ToString("N2")</strong><p>仅统计已批准且选定报价的需求</p></div>
+            <div class="pf-kpi @(dashboard.ApprovedExpectedGrossProfit < 0 ? "pf-kpi-negative" : "pf-kpi-green")"><span>已批准预计毛利<i class="fas fa-chart-line" aria-hidden="true"></i></span><strong class="pf-kpi-money">¥@dashboard.ApprovedExpectedGrossProfit.ToString("N2")</strong><p>销售金额减采购报价，未扣其他成本</p></div>
+        </div>
+        <div class="pf-dashboard-grid">
+            <section class="pf-panel pf-queue"><div class="pf-panel-heading"><div><span class="pf-section-kicker">REVIEW QUEUE</span><h2>待审核队列 <small>@dashboard.PendingReviewCount 笔</small></h2></div><a class="pf-link" href="/Purchasing/Index?status=PendingReview">查看全部 →</a></div>
+            @if (dashboard.PendingReviews.Count == 0) { <div class="pf-empty-state"><span class="pf-empty-symbol"><i class="fas fa-check" aria-hidden="true"></i></span><h3>待审核队列已清空</h3><p>采购员提交新需求后，会出现在这里。</p></div> }
+            @foreach (var item in dashboard.PendingReviews) { <a class="pf-queue-row" asp-page="/Purchasing/Details" asp-route-id="@item.Id"><span class="pf-document-icon"><i class="far fa-file-alt" aria-hidden="true"></i></span><span class="pf-queue-description"><strong>@item.OrderReference</strong><small>@item.Description</small></span><span class="pf-queue-amount">¥@item.SaleAmount.ToString("N2")<small>预计销售金额</small></span><span class="pf-row-arrow">↗</span></a> }
+            <div class="pf-panel-footnote">按需求创建时间排列，较早创建的需求优先显示。</div></section>
+            <section class="pf-panel pf-lifecycle"><div class="pf-panel-heading"><div><span class="pf-section-kicker">PIPELINE</span><h2>流程分布</h2></div><span class="pf-subtle-tag">全部需求</span></div>
+                @foreach (var stage in new[] { ("草稿", "Draft", dashboard.DraftCount), ("待审核", "PendingReview", dashboard.PendingReviewCount), ("已退回", "Returned", dashboard.ReturnedCount), ("已批准", "Approved", dashboard.ApprovedCount) })
+                { <a href="/Purchasing/Index?status=@stage.Item2" class="pf-pipeline-row"><span><i class="pf-stage-dot pf-stage-@stage.Item2.ToLowerInvariant()"></i>@stage.Item1</span><strong>@stage.Item3</strong><div class="pf-pipeline-track"><span class="pf-stage-bg-@stage.Item2.ToLowerInvariant()" style="width:@(dashboard.TotalCount == 0 ? 0 : stage.Item3 * 100 / dashboard.TotalCount)%"></span></div></a> }
+                <a class="pf-guide-link" href="/Guide"><i class="far fa-lightbulb" aria-hidden="true"></i><span><strong>第一次体验？</strong><small>五分钟跑通采购与审核</small></span> →</a>
+            </section>
+        </div>
+        <section class="pf-panel"><div class="pf-panel-heading"><div><span class="pf-section-kicker">RECENT REQUESTS</span><h2>最近创建</h2></div><a href="/Purchasing/Index" class="pf-link">进入需求列表 →</a></div><div class="table-responsive"><table class="table pf-table"><thead><tr><th>销售单号与需求</th><th>预计销售金额</th><th>当前状态</th><th>创建时间</th><th></th></tr></thead><tbody>
+        @foreach (var item in dashboard.RecentRequests) { <tr><td data-label="销售单号"><strong>@item.OrderReference</strong><span class="pf-row-subtitle">@item.Description</span></td><td data-label="预计销售金额" class="pf-money">¥@item.SaleAmount.ToString("N2")</td><td data-label="当前状态"><span class="pf-status pf-status-@item.Status.ToString().ToLowerInvariant()">@PurchaseFlow.Web.Pages.Purchasing.IndexModel.StatusText(item.Status)</span></td><td data-label="创建时间" class="pf-muted">@item.CreationTime.ToString("MM-dd HH:mm")</td><td data-label="操作"><a class="pf-link" asp-page="/Purchasing/Details" asp-route-id="@item.Id">查看决策 ↗</a></td></tr> }
+        @if (dashboard.RecentRequests.Count == 0) { <tr><td class="pf-empty" colspan="5">还没有需求。进入采购工作台创建第一笔。</td></tr> }
+        </tbody></table></div></section>
+    }
+</div>
