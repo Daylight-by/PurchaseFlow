@@ -36,7 +36,7 @@
 - ABP CLI 10.6.2：项目 README 指定此版本。
 - 可选的 IDE：Visual Studio、Rider 或 VS Code 均可；学习时建议同时保留 PowerShell 窗口观察日志。
 
-在仓库根目录 D:\shuju\AAA\abp-procurement-workflow 打开 PowerShell，执行：
+在仓库根目录打开 PowerShell（把下面命令中的 `$repo` 换成你的本地仓库路径），执行：
 
 ~~~powershell
 dotnet --version
@@ -51,7 +51,8 @@ yarn --version
 ### 恢复依赖和前端库
 
 ~~~powershell
-Set-Location D:\shuju\AAA\abp-procurement-workflow\app\PurchaseFlow
+$repo = '<你的仓库根目录>'
+Set-Location $repo\app\PurchaseFlow
 dotnet restore PurchaseFlow.slnx
 Set-Location src\PurchaseFlow.Web
 abp install-libs
@@ -64,7 +65,7 @@ abp install-libs 是项目 README 给出的命令；它安装 ABP Razor UI 静�
 先开第一个 PowerShell 窗口运行迁移器：
 
 ~~~powershell
-Set-Location D:\shuju\AAA\abp-procurement-workflow\app\PurchaseFlow\src\PurchaseFlow.DbMigrator
+Set-Location $repo\app\PurchaseFlow\src\PurchaseFlow.DbMigrator
 dotnet run
 ~~~
 
@@ -73,7 +74,7 @@ dotnet run
 再开第二个窗口启动 Web：
 
 ~~~powershell
-Set-Location D:\shuju\AAA\abp-procurement-workflow\app\PurchaseFlow\src\PurchaseFlow.Web
+Set-Location $repo\app\PurchaseFlow\src\PurchaseFlow.Web
 dotnet dev-certs https --trust
 dotnet run --launch-profile PurchaseFlow.Web
 ~~~
@@ -97,7 +98,7 @@ ABP 模板管理员账号是 admin / <local-template-password>，仅用于本地
 3. 运行领域测试：
 
 ~~~powershell
-Set-Location D:\shuju\AAA\abp-procurement-workflow\app\PurchaseFlow
+Set-Location $repo\app\PurchaseFlow
 dotnet test test\PurchaseFlow.Domain.Tests\PurchaseFlow.Domain.Tests.csproj
 ~~~
 

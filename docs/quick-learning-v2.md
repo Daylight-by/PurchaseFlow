@@ -12,10 +12,10 @@
 
 ## 1. 先跑起来：本机工具与常规 .NET 命令
 
-仓库已有本机工具目录 `.tools`。下面的命令从仓库根目录 `D:\shuju\AAA\abp-procurement-workflow` 执行，使用仓库内 SDK；另一台电脑可把 `$dotnet` 换成系统 `dotnet`，把 `$abp` 换成已安装的 ABP CLI。
+仓库已有本机工具目录 `.tools`。下面的命令从仓库根目录执行（把 `$repo` 换成你的本地仓库路径），使用仓库内 SDK；另一台电脑可把 `$dotnet` 换成系统 `dotnet`，把 `$abp` 换成已安装的 ABP CLI。
 
 ```powershell
-$repo = 'D:\shuju\AAA\abp-procurement-workflow'
+$repo = '<你的仓库根目录>'
 $dotnet = Join-Path $repo '.tools\dotnet\dotnet.exe'
 $abp = Join-Path $repo '.tools\abp-cli\abp.exe'
 
@@ -32,17 +32,17 @@ Set-Location (Join-Path $repo 'app\PurchaseFlow\src\PurchaseFlow.Web')
 本机已有演示数据库时，直接双击仓库根目录的 `启动项目.cmd` 即可，不需要重复运行迁移器或重建已有数据。脚本只有发现已有 Web 实例时才会自动打开浏览器；首次启动需要等待窗口出现 `Now listening on: https://localhost:44345`，再手动点击或打开该 HTTPS 地址。新电脑或新数据库才需要从各自项目目录运行迁移器和 Web，因为配置中的 `Data Source=../../PurchaseFlow.db;` 是相对当前工作目录的：
 
 ```powershell
-Set-Location D:\shuju\AAA\abp-procurement-workflow\app\PurchaseFlow\src\PurchaseFlow.DbMigrator
-& D:\shuju\AAA\abp-procurement-workflow\.tools\dotnet\dotnet.exe run
+Set-Location $repo\app\PurchaseFlow\src\PurchaseFlow.DbMigrator
+& $repo\.tools\dotnet\dotnet.exe run
 
-Set-Location D:\shuju\AAA\abp-procurement-workflow\app\PurchaseFlow\src\PurchaseFlow.Web
-& D:\shuju\AAA\abp-procurement-workflow\.tools\dotnet\dotnet.exe run --launch-profile PurchaseFlow.Web
+Set-Location $repo\app\PurchaseFlow\src\PurchaseFlow.Web
+& $repo\.tools\dotnet\dotnet.exe run --launch-profile PurchaseFlow.Web
 ```
 
 使用系统 SDK 时等价于：
 
 ```powershell
-Set-Location D:\shuju\AAA\abp-procurement-workflow\app\PurchaseFlow
+Set-Location $repo\app\PurchaseFlow
 dotnet restore PurchaseFlow.slnx
 dotnet test PurchaseFlow.slnx
 Set-Location src\PurchaseFlow.DbMigrator
