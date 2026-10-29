@@ -1,0 +1,51 @@
+@page
+@model Volo.Abp.Account.Web.Pages.Account.LoginModel
+
+<div class="card mt-3 shadow-sm rounded">
+    <div class="card-body p-5">
+        <h4>Login</h4>
+
+        <div class="alert alert-info">
+            <strong>体验账号</strong>（下方已预填，直接点 Login 即可）
+            <ul class="mt-2 mb-0">
+                <li>管理员（全流程）：<code>admin</code> / <code>1q2w3E*</code></li>
+                <li>采购员：<code>demo.buyer</code> / <code>Buyer@Demo123</code></li>
+                <li>审核员：<code>demo.reviewer</code> / <code>Reviewer@Demo123</code></li>
+            </ul>
+        </div>
+
+        <strong>
+            Are you a new user?
+            <a href="/Account/Register" class="text-decoration-none">Register</a>
+        </strong>
+        <form method="post" class="mt-4">
+            <div class="mb-3">
+                <label class="form-label" for="LoginInput_UserNameOrEmailAddress">Username or email address</label>
+                <input class="form-control" type="text" data-val="true" data-val-length="The field Username or email address must be a string with a maximum length of 256." data-val-length-max="256" data-val-required="The Username or email address field is required." id="LoginInput_UserNameOrEmailAddress" maxlength="256" name="LoginInput.UserNameOrEmailAddress" value="admin" />
+                <span class="text-danger" data-valmsg-for="LoginInput.UserNameOrEmailAddress" data-valmsg-replace="true"></span>
+            </div>
+
+            <div class="mb-3">
+                <label class="form-label" for="LoginInput_Password">Password</label>
+                <div class="input-group">
+                    <input type="password" class="form-control" autocomplete="new-password" maxlength="128" data-val="true" data-val-length="The field Password must be a string with a maximum length of 128." data-val-length-max="128" data-val-required="The Password field is required." id="LoginInput_Password" name="LoginInput.Password" value="1q2w3E*" />
+                    <button class="btn btn-secondary" type="button" id="PasswordVisibilityButton"><i class="fa fa-eye-slash" aria-hidden="true"></i></button>
+                </div>
+                <span class="field-validation-valid text-danger" data-valmsg-for="LoginInput.Password" data-valmsg-replace="true"></span>
+            </div>
+
+            <div class="row">
+                <div class="col">
+                    <div class="mb-2 custom-checkbox custom-control form-check"><input class="mb-4 form-check-input " type="checkbox" data-val="true" data-val-required="The Remember me field is required." id="LoginInput_RememberMe" name="LoginInput.RememberMe" value="true" /><label class="form-check-label" for="LoginInput_RememberMe">Remember me</label></div>
+                </div>
+                <div class="text-end col">
+                    <a href="/Account/ForgotPassword">Forgot password?</a>
+                </div>
+            </div>
+            <div class="d-grid gap-2">
+                <button type="submit" name="Action" value="Login" class="btn-lg mt-3 btn btn-primary" data-busy-text="Processing...">Login</button>
+            </div>
+            <input name="LoginInput.RememberMe" type="hidden" value="false" />
+        </form>
+    </div>
+</div>

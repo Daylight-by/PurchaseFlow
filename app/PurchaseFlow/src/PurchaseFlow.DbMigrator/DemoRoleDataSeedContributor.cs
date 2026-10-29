@@ -1,7 +1,6 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using Microsoft.Extensions.Configuration;
 using PurchaseFlow.Permissions;
 using Volo.Abp.Data;
 using Volo.Abp.DependencyInjection;
@@ -12,9 +11,9 @@ using Volo.Abp.PermissionManagement;
 namespace PurchaseFlow.DbMigrator;
 
 /// <summary>
-/// Creates reusable demo roles. Demo users are created only when their passwords
-/// are supplied through local configuration, so no public repository credential
-/// grants access to a newly deployed environment.
+/// Creates reusable demo roles and demo users with well-known demo passwords so
+/// a freshly deployed instance is directly usable for evaluation. These are
+/// sample accounts meant for public demonstration, not production credentials.
 /// </summary>
 public class DemoRoleDataSeedContributor : IDataSeedContributor, ITransientDependency
 {
@@ -22,20 +21,17 @@ public class DemoRoleDataSeedContributor : IDataSeedContributor, ITransientDepen
     private readonly IdentityUserManager _userManager;
     private readonly IPermissionManager _permissionManager;
     private readonly IGuidGenerator _guidGenerator;
-    private readonly IConfiguration _configuration;
 
     public DemoRoleDataSeedContributor(
         IdentityRoleManager roleManager,
         IdentityUserManager userManager,
         IPermissionManager permissionManager,
-        IGuidGenerator guidGenerator,
-        IConfiguration configuration)
+        IGuidGenerator guidGenerator)
     {
         _roleManager = roleManager;
         _userManager = userManager;
         _permissionManager = permissionManager;
         _guidGenerator = guidGenerator;
-        _configuration = configuration;
     }
 
     public async Task SeedAsync(DataSeedContext context)
@@ -47,10 +43,11 @@ public class DemoRoleDataSeedContributor : IDataSeedContributor, ITransientDepen
         await EnsureRoleAsync("buyer", PurchaseFlowPermissions.EditRequests);
         await EnsureRoleAsync("reviewer", PurchaseFlowPermissions.ReviewRequests);
 
-        await EnsureUserAsync("demo.buyer", "buyer@example.invalid", "buyer",
-            _configuration["Demo:BuyerPassword"]);
-        await EnsureUserAsync("demo.reviewer", "reviewer@example.invalid", "reviewer",
-            _configuration["Demo:ReviewerPassword"]);
+        // Demo accounts are created unconditionally with well-known demo
+        // passwords, so a freshly deployed instance is directly usable for
+        // evaluation (the credentials are shown on the login page).
+        await EnsureUserAsync("demo.buyer", "buyer@example.invalid", "buyer", "Buyer@Demo123");
+        await EnsureUserAsync("demo.reviewer", "reviewer@example.invalid", "reviewer", "Reviewer@Demo123");
     }
 
     private async Task EnsureRoleAsync(string name, string actionPermission)
