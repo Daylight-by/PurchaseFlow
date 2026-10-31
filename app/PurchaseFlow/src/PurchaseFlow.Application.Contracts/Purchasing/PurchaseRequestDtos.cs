@@ -138,6 +138,13 @@ public class AddSupplierQuoteDto
     [StringLength(500)]
     public string? Note { get; set; }
 
+    /// <summary>
+    /// 第二轮第 3 批：报价有效期（业务日期，含当天）。为空表示长期有效；
+    /// 过期后该报价不能被选择/提交，页面会显示“已过期”。
+    /// </summary>
+    [DataType(DataType.Date)]
+    public DateTime? ValidUntil { get; set; }
+
     /// <summary>逐项报价：必须覆盖当前采购需求的全部明细。</summary>
     [Required, MinLength(1)]
     public List<SupplierQuoteLineInputDto> Lines { get; set; } = new();
@@ -253,6 +260,10 @@ public class SupplierQuoteDto
     public decimal ExpectedGrossProfit { get; set; }
     public decimal CostPremiumToLowest { get; set; }
 
+    /// <summary>第二轮第 3 批：报价有效期与“当前是否已过期”（服务端按 UTC 日期判定）。</summary>
+    public DateTime? ValidUntil { get; set; }
+    public bool IsExpired { get; set; }
+
     /// <summary>
     /// P0-1：报价逐项明细。报价总额必须等于这些行的小计合计，
     /// 审批生成采购订单时也直接使用这里的报价（成交）单价。
@@ -314,6 +325,10 @@ public class ReviewEventDto
 public class PurchaseOrderLineDto
 {
     public Guid Id { get; set; }
+
+    /// <summary>第二轮第 3 批：来源物料档案 Id（可空；用于历史采购价追溯，旧数据为 null）。</summary>
+    public Guid? MaterialId { get; set; }
+
     public string ItemName { get; set; } = string.Empty;
     public string Specification { get; set; } = string.Empty;
     public decimal Quantity { get; set; }

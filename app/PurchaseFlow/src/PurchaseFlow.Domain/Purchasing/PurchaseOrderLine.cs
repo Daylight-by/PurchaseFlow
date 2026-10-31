@@ -14,6 +14,13 @@ public class PurchaseOrderLine : Entity<Guid>, IMultiTenant
 {
     public Guid? TenantId { get; private set; }
     public Guid PurchaseOrderId { get; private set; }
+
+    /// <summary>
+    /// 第二轮第 3 批：来源物料档案 Id（可空，旧订单行为 null）。用于按物料追溯
+    /// 历史采购成交价；刻意不建外键 —— 物料档案可停用/更名，历史订单优先。
+    /// </summary>
+    public Guid? MaterialId { get; private set; }
+
     public string ItemName { get; private set; } = string.Empty;
     public string Specification { get; private set; } = string.Empty;
     public decimal Quantity { get; private set; }
@@ -26,6 +33,10 @@ public class PurchaseOrderLine : Entity<Guid>, IMultiTenant
 
     protected PurchaseOrderLine() { }
 
+    /// <summary>
+    /// 旧签名保留：不关联物料档案（materialId=null），委托给带 materialId 的新重载，
+    /// 保证既有调用/旧测试不受影响。
+    /// </summary>
     public PurchaseOrderLine(
         Guid id,
         Guid? tenantId,
@@ -34,10 +45,24 @@ public class PurchaseOrderLine : Entity<Guid>, IMultiTenant
         string specification,
         decimal quantity,
         decimal unitPrice)
+        : this(id, tenantId, purchaseOrderId, itemName, specification, quantity, unitPrice, materialId: null)
+    {
+    }
+
+    public PurchaseOrderLine(
+        Guid id,
+        Guid? tenantId,
+        Guid purchaseOrderId,
+        string itemName,
+        string specification,
+        decimal quantity,
+        decimal unitPrice,
+        Guid? materialId)
         : base(id)
     {
         TenantId = tenantId;
         PurchaseOrderId = purchaseOrderId;
+        MaterialId = materialId;
         ItemName = Check.NotNullOrWhiteSpace(itemName, nameof(itemName), maxLength: 100).Trim();
         Specification = string.IsNullOrWhiteSpace(specification)
             ? string.Empty

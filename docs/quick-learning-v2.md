@@ -6,7 +6,7 @@
 
 当前仓库是一个可本地运行的教学业务切片：.NET 10、ABP 10.6.2、ASP.NET Core Razor Pages、EF Core、SQLite。主流程是“采购需求 → 供应商报价 → 选择依据 → 提交审核 → 退回或批准”。三类核心业务记录是 `PurchaseRequest`、`SupplierQuote`、`ReviewEvent`，另有 `Supplier`、`Material` 主数据档案；Identity、权限、租户、审计等由 ABP 模块提供。
 
-源码能确认的示例规则包括：销售金额大于零、每条报价单价不小于零、报价必须逐项覆盖当前需求全部明细（合计由服务端按明细汇总）、交付天数不小于零；提交至少两条报价；选中报价必须属于当前需求并填写理由；草稿和已退回可编辑；待审核和已批准不可编辑；退回需要审核意见；批准后进入冻结状态；预计毛利等于销售金额减选中报价；同一需求内供应商名称不区分大小写地不能重复；供应商与物料档案编码在租户内唯一，档案可停用、停用后不能再被新报价或新需求明细引用，单据上的名称/规格仍是快照；采购需求明细汇总 ≤ ¥50,000 时审核员一级批准即通过并生成订单，> ¥50,000 时一级批准只进入 `PendingSecondApproval`（二级待审、不生成订单），必须由另一位具备 `ApproveHighValue` 权限的用户二级批准后才通过并生成订单。这些都是教学切片规则，不是莫先生所在公司的制度。
+源码能确认的示例规则包括：销售金额大于零、每条报价单价不小于零、报价必须逐项覆盖当前需求全部明细（合计由服务端按明细汇总）、交付天数不小于零；提交至少两条报价；选中报价必须属于当前需求并填写理由；草稿和已退回可编辑；待审核和已批准不可编辑；退回需要审核意见；批准后进入冻结状态；预计毛利等于销售金额减选中报价；同一需求内供应商名称不区分大小写地不能重复；供应商与物料档案编码在租户内唯一，档案可停用、停用后不能再被新报价或新需求明细引用，单据上的名称/规格仍是快照；采购需求明细汇总 ≤ ¥50,000 时审核员一级批准即通过并生成订单，> ¥50,000 时一级批准只进入 `PendingSecondApproval`（二级待审、不生成订单），必须由另一位具备 `ApproveHighValue` 权限的用户二级批准后才通过并生成订单；报价可设有效期（UTC 业务日期、含当天，NULL=长期有效，过期报价不能选择或提交，新增报价不允许过去日期），报价录入行会显示该物料最近一次已生成订单的成交价参考。这些都是教学切片规则，不是莫先生所在公司的制度。
 
 新增的分析能力只服务于比较和提示：服务端 `QuoteDecisionAnalyzer.Analyze` 是无 I/O 的静态计算，给出三项提交检查、最低价/最快交期（支持并列）、预计毛利率、Pareto 价期均不占优和负毛利提示。提示不会阻止提交。详情页的“决策实验台”在浏览器端按价格/交期权重计算相对分数，调节权重不会改变已选报价，也不写数据库。独立 A4“决策简报”读取详情 DTO，打印动作是浏览器的 `window.print()`。运行时这些功能不生成 AI 内容；项目的页面、后端和测试曾借助 AI 生成并迭代，学习者正在按代码链路学习和验证，报价、理由和业务规则仍是示例数据与人工输入。
 
@@ -64,7 +64,7 @@ dotnet run --launch-profile PurchaseFlow.Web
 ### 10–25 分钟：用真实页面建立业务心智模型
 
 1. 在“采购需求”创建销售金额 100000 的需求。
-2. 录入需求明细（办公椅 10 把、会议桌 2 张），再按明细逐项录入 A 的报价单价（合计 82000 元、10 天）与 B 的报价单价（合计 86000 元、5 天）；选择 B，填写“交付时间更短”。
+2. 录入需求明细（办公椅 10 把、会议桌 2 张），再按明细逐项录入 A 的报价单价（合计 82000 元、10 天）与 B 的报价单价（合计 86000 元、5 天）；可给 A 报价填写有效期=今天、B 留空（页面分别显示“有效至 …/长期有效”）；选择 B，填写“交付时间更短”。
 3. 观察预计毛利 14000 元、比最低报价高 4000 元、交付提前 5 天；页面明确这是预计毛利，不是净利润。
 4. 在首页确认 Dashboard 的需求数、报价数、待审核队列和已批准金额只来自当前租户可见数据。
 
@@ -90,19 +90,21 @@ dotnet run --launch-profile PurchaseFlow.Web
 3. 用另一名采购员尝试修改他人需求，确认 `GetOwnedRequestAsync` 拒绝。
 4. 打开“查看决策简报”，打印预览，确认它是独立 A4 页面且不新增数据库记录。
 5. 建一条高金额需求（报价 > ¥50,000），确认一级批准后进入二级待审且没有订单；用一级审批人自己再做二级批准应被拒绝（`SecondApprovalRequiresDifferentUser`），换另一位有 `ApproveHighValue` 权限的管理员批准后才生成订单。
-6. 运行 `dotnet test PurchaseFlow.slnx`，把测试输出和浏览器验收结果分开记录。
+6. 报价有效期：录入昨天日期的报价应被拒绝（`QuoteExpired`）；过期报价行显示“已过期”且没有选择按钮；提交已过期的选中报价也应被拒绝。
+7. 历史采购价：完成一单后新建同物料需求，报价录入区显示“上次采购价”和来源订单号（只读，不参与金额计算）。
+8. 运行 `dotnet test PurchaseFlow.slnx`，把测试输出和浏览器验收结果分开记录。
 
 ## 3. 两天深入路线
 
 ### 第一天：领域、用例和页面链路
 
-上午先读 `PurchaseRequestStatus`、`PurchaseFlowErrors`、`PurchaseRequest`、`SupplierQuote`、`ReviewEvent`。画出 `Draft → PendingReview → Approved`（高金额再多一级 `PendingReview → PendingSecondApproval → Approved`）与 `PendingReview/PendingSecondApproval → Returned → PendingReview`，标出可编辑状态只有 `Draft` 和 `Returned`。运行领域测试，理解 `Submit(1)` 为什么抛 `NeedTwoQuotes`，以及 `SelectQuote` 为什么只检查理由和可编辑状态：跨对象的“报价 ID 是否属于这条需求”由 Application 层先查询并检查。
+上午先读 `PurchaseRequestStatus`、`PurchaseFlowErrors`、`PurchaseRequest`、`SupplierQuote`、`ReviewEvent`。画出 `Draft → PendingReview → Approved`（高金额再多一级 `PendingReview → PendingSecondApproval → Approved`）与 `PendingReview/PendingSecondApproval → Returned → PendingReview`，标出可编辑状态只有 `Draft` 和 `Returned`。同时读 `SupplierQuote.ValidUntil/IsExpired/EnsureNotExpired`：有效期按 UTC 日期、含当天，`NULL` 表示长期有效，过期报价不能被选择或提交。运行领域测试，理解 `Submit(1)` 为什么抛 `NeedTwoQuotes`，以及 `SelectQuote` 为什么只检查理由和可编辑状态：跨对象的“报价 ID 是否属于这条需求”由 Application 层先查询并检查。
 
 下午按接口到实现阅读 `IPurchaseRequestAppService`、`PurchaseRequestDtos`、`PurchaseRequestAppService`。把接口和按钮用例（包括 Dashboard 入口）与输入 DTO、权限、状态影响写成表。特别确认 `GetAsync` 中的 `ExpectedGrossProfit = SaleAmount - selected.Amount` 是展示用的预计毛利。最后从 `Details.cshtml` 逐个追 POST handler，理解 `RunAsync` 如何捕获 `BusinessException` 并重新加载页面。
 
 ### 第二天：持久化、ABP 基础设施和表达
 
-上午读 `PurchaseFlowDbContext.OnModelCreating`、EF Core 模块和 9 个迁移（InitialCreate、HostOrderReferenceUnique、AddPurchaseRequestLines、AddPurchaseOrders、AddGoodsReceipts、AddReceiptConcurrency、AddSupplierQuoteLines、AddMasterData、AddApprovalLevels）。确认业务 DbSet（需求/明细、报价/报价明细、订单/明细、收货/明细、审核记录、供应商档案、物料档案）、列长度、金额精度、外键级联、租户索引和宿主 `TenantId IS NULL` 的部分唯一索引；另注意 `AppPurchaseRequests` 的可空 `FirstApproverUserId` 列（只记录一级审批人，不建外键）。理解 `AddDefaultRepositories(includeAllEntities: true)` 为什么让非聚合根报价和审核记录也有默认仓储。
+上午读 `PurchaseFlowDbContext.OnModelCreating`、EF Core 模块和 10 个迁移（InitialCreate、HostOrderReferenceUnique、AddPurchaseRequestLines、AddPurchaseOrders、AddGoodsReceipts、AddReceiptConcurrency、AddSupplierQuoteLines、AddMasterData、AddApprovalLevels、AddQuoteValidityAndPriceHistory）。确认业务 DbSet（需求/明细、报价/报价明细、订单/明细、收货/明细、审核记录、供应商档案、物料档案）、列长度、金额精度、外键级联、租户索引和宿主 `TenantId IS NULL` 的部分唯一索引；另注意 `AppPurchaseRequests.FirstApproverUserId`、`AppSupplierQuotes.ValidUntil`、`AppPurchaseOrderLines.MaterialId` 三个可空列（一级审批人、报价有效期、订单明细来源物料，均不建外键）。理解 `AddDefaultRepositories(includeAllEntities: true)` 为什么让非聚合根报价和审核记录也有默认仓储。
 
 中午专门核对租户与工作单元边界：实体实现 `IMultiTenant` 并保存 `TenantId`；Application 创建时写入 `CurrentTenant.Id`；ABP 数据过滤和当前租户上下文共同影响查询。Web 管线调用 `UseMultiTenancy`、`UseUnitOfWork`、`UseAuthorization`，但 EF Core 模块把 `TransactionBehavior` 设为 `Disabled`。所以“同一请求通常共享工作单元”不能表述成生产级事务保证，切换正式数据库时必须重新设计和验证事务、并发与重试。
 
@@ -133,7 +135,8 @@ dotnet run --launch-profile PurchaseFlow.Web
 | 打开采购需求 | `Pages/Purchasing/Index.cshtml.cs` `OnGetAsync` | `GetListAsync(PurchaseRequestListInput)` | 关键词、状态、分页；页面权限要求 `Requests`。 |
 | 创建需求 | `IndexModel.OnPostCreateAsync` | `CreateAsync` → `new PurchaseRequest` → `InsertAsync` | 初始 `Draft`；单号重复由 Application 查询和数据库索引共同防护。 |
 | 修改需求 | `DetailsModel.OnPostUpdateAsync` | `UpdateAsync` → `SetDetails` | 仅创建者且 `Draft/Returned` 可修改。 |
-| 添加报价 | `DetailsModel.OnPostAddQuoteAsync` | `AddQuoteAsync` → `SupplierQuote.AddLine` 逐项生成报价明细 → `InsertAsync` | 逐项报价单价不小于零且必须覆盖全部需求明细；合计由服务端按明细汇总；天数不小于零；同一需求供应商名忽略大小写不重复。 |
+| 添加报价 | `DetailsModel.OnPostAddQuoteAsync` | `AddQuoteAsync` → `request.AddQuote` → `SupplierQuote.AddLine` 逐项生成报价明细 → `InsertAsync` | 逐项报价单价不小于零且必须覆盖全部需求明细；合计由服务端按明细汇总；天数不小于零；同一需求供应商名忽略大小写不重复；可选有效期（UTC 含当天，`NULL`=长期有效；过去日期被拒绝，过期报价不能选择/提交）。 |
+| 查看上次采购价 | `Pages/Purchasing/Details.cshtml.cs` `LoadAsync` | `IMaterialAppService.GetLastPurchasePriceAsync(materialId)` | 按当前明细的物料档案查最近一次已生成采购订单的成交单价、数量、订单号、供应商与下单时间；只读参考，不参与金额/审批计算，无历史时显示空态。 |
 | 删除报价 | `OnPostDeleteQuoteAsync` | `DeleteQuoteAsync` → `ClearSelectedQuote` → `DeleteAsync` | 仅可编辑状态；删除选中项会先清除选择。 |
 | 选择/更新理由 | `OnPostSelectAsync` | `SelectQuoteAsync` → `PurchaseRequest.SelectQuote` | Application 先确认报价属于需求，Domain 检查理由和可编辑状态。 |
 | 提交审核 | `OnPostSubmitAsync` | `SubmitAsync` → `request.Submit` → `AddEventAsync("Submitted")` | 至少两条报价、有效选择、非空理由；进入 `PendingReview`。 |
@@ -195,13 +198,13 @@ dotnet run --launch-profile PurchaseFlow.Web
 | 逻辑表/实体 | 关键字段 | 关系与用途 |
 | --- | --- | --- |
 | `AppPurchaseRequests` / `PurchaseRequest` | `TenantId`、`BuyerUserId`、`OrderReference`、`Description`、`SaleAmount`、`Status`、`SelectedQuoteId`、`SelectionReason`、`FirstApproverUserId` | 采购需求主记录。`TenantId + OrderReference` 唯一；宿主 `TenantId IS NULL` 有单独部分唯一索引。`FirstApproverUserId` 只记录一级审批人（可空、不建外键），二级审批换人校验与页面提示依赖它。 |
-| `AppSupplierQuotes` / `SupplierQuote` | `TenantId`、`PurchaseRequestId`、`SupplierName`、`Amount`、`DeliveryDays`、`Note` | 报价记录；`Amount` 由报价明细汇总并随明细变化重算（存储列，便于 Dashboard 只查报价表时取到金额）。通过 `PurchaseRequestId` 关联需求，外键级联删除。报价不是当前代码中的聚合内集合，而是独立 `Entity<Guid>`。 |
+| `AppSupplierQuotes` / `SupplierQuote` | `TenantId`、`PurchaseRequestId`、`SupplierName`、`Amount`、`DeliveryDays`、`Note`、`ValidUntil` | 报价记录；`Amount` 由报价明细汇总并随明细变化重算（存储列，便于 Dashboard 只查报价表时取到金额）。通过 `PurchaseRequestId` 关联需求，外键级联删除。报价不是当前代码中的聚合内集合，而是独立 `Entity<Guid>`。`ValidUntil` 可空（UTC 业务日期、含当天、NULL=长期有效），过期判定由 `IsExpired` 完成。 |
 | `AppSupplierQuoteLines` / `SupplierQuoteLine` | `TenantId`、`SupplierQuoteId`、`PurchaseRequestLineId`、`ItemName`、`Specification`、`Quantity`、`UnitPrice` | 报价明细：按需求明细逐项记录成交单价，小计 = 数量 × 单价（2 位四舍五入）；`PurchaseRequestLineId` 只作需求行快照来源，不建外键。报价合计必须等于明细合计。 |
 | `AppReviewEvents` / `ReviewEvent` | `TenantId`、`PurchaseRequestId`、`ActorUserId`、`Action`、`Comment`、`OccurredAtUtc` | 提交、退回、批准的可追溯事件；同样关联需求并级联删除，按发生时间索引。 |
 | `AppSuppliers` / `Supplier` | `TenantId`、`Code`、`Name`、`ContactName`、`ContactPhone`、`PaymentTermsDays`、`Rating`、`IsActive`、`Note` | 供应商主数据；`(TenantId, Code)` 唯一，宿主另有过滤唯一索引；被报价/订单以可空 `SupplierId` 引用（不建外键），单据仍存名称快照。 |
 | `AppMaterials` / `Material` | `TenantId`、`Code`、`Name`、`Specification`、`Unit`、`Category`、`IsActive`、`Note` | 物料主数据；`(TenantId, Code)` 唯一；被需求明细以可空 `MaterialId` 引用（不建外键），明细仍存名称/规格快照。 |
 
-另有三列可空引用：`AppPurchaseRequestLines.MaterialId`、`AppSupplierQuotes.SupplierId`、`AppPurchaseOrders.SupplierId`。
+另有四列可空引用：`AppPurchaseRequestLines.MaterialId`、`AppSupplierQuotes.SupplierId`、`AppPurchaseOrders.SupplierId`、`AppPurchaseOrderLines.MaterialId`（订单明细来源物料，用于历史采购价）；`AppSupplierQuotes.ValidUntil` 是独立的可空有效期列。
 核心业务表之外还有报价明细、采购订单、收货等表，以及 ABP Identity、权限、审计、租户、OpenIddict 等基础设施表；不要把教学切片的表说成完整采购系统的全部数据模型。
 
 ## 9. 权限、状态、租户和 UOW 边界
@@ -281,7 +284,7 @@ Web 管线使用 `UseUnitOfWork`，应用服务一次调用通常在同一个工
 ## 12. 复现与交付检查
 
 - 当前记录的浏览器验收覆盖 1440、1280、768、390、360 宽度；匿名首页/简报权限、实验台 0/100/reset 无网络写入、警示和 A4 简报均已通过。这是已记录场景的结果，不等于所有 UI 或业务场景全覆盖。
-- 当前完整 `dotnet test PurchaseFlow.slnx` 记录为 125 项通过：Domain 48、Application 11、EF Core 54、Web 12。复现时仍应按本机环境重新执行并保留输出。
+- 当前完整 `dotnet test PurchaseFlow.slnx` 记录为 137 项通过：Domain 53、Application 11、EF Core 58、Web 15。复现时仍应按本机环境重新执行并保留输出。
 - 最终演示应使用现场真实可登录的角色权限；不要在文档、截图或消息中暴露私密凭据。
 - GitHub 仓库链接仍待补充；正式数据库、事务/并发方案和真实业务确认仍待交付。
 

@@ -34,6 +34,7 @@
     "PurchaseFlow:DuplicateMaterialCode": "该物料编码已存在。",
     "PurchaseFlow:MaterialInactive": "该物料已停用，不能用于新的采购明细。",
     "PurchaseFlow:SecondApprovalRequiresDifferentUser": "二级审批必须由另一名审批人完成，不能与一级审批为同一人。",
+    "PurchaseFlow:QuoteExpired": "该供应商报价已过期，不能再被选择或提交。",
     "Permission:MasterData": "查看供应商与物料档案",
     "Permission:ManageMasterData": "维护供应商与物料档案",
     "Permission:ApproveHighValue": "高金额采购二级审批",

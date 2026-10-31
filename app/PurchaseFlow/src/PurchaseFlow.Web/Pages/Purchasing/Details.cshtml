@@ -227,6 +227,19 @@
                                     @* 第二轮第 1 批：报价关联了供应商档案时给出提示；档案已停用则提示不可再用于新报价。 *@
                                     <span class="pf-row-subtitle">@(Model.IsKnownSupplier(quote.SupplierId) ? "已关联供应商档案" : "关联的供应商档案已停用")</span>
                                 }
+                                @* 第二轮第 3 批：报价有效期。空=长期有效；过期用红色标签明确提示不可再选择。 *@
+                                @if (quote.IsExpired)
+                                {
+                                    <span class="pf-quote-validity pf-quote-validity-expired">已过期</span>
+                                }
+                                else if (quote.ValidUntil.HasValue)
+                                {
+                                    <span class="pf-quote-validity">有效至 @quote.ValidUntil.Value.ToString("yyyy-MM-dd")</span>
+                                }
+                                else
+                                {
+                                    <span class="pf-quote-validity">长期有效</span>
+                                }
                             </td>
                             <td data-label="采购报价" class="pf-money">¥@quote.Amount.ToString("N2")</td>
                             <td data-label="交付">@quote.DeliveryDays 天</td>
@@ -241,11 +254,20 @@
                             <td data-label="操作" class="@( !Model.CanEdit && !isSelected ? "pf-empty-action" : "")">
                                 @if (Model.CanEdit)
                                 {
-                                    <form method="post" asp-page-handler="Select" asp-route-id="@Model.PurchaseRequest.Id" class="pf-quote-select-form">
-                                        <input type="hidden" name="quoteId" value="@quote.Id" />
-                                        <input class="form-control form-control-sm" name="reason" aria-label="选择 @quote.SupplierName 的理由" placeholder="选择理由" value="@(isSelected ? Model.PurchaseRequest.SelectionReason : "")" maxlength="500" required />
-                                        <button class="btn btn-sm btn-outline-primary" type="submit">@(isSelected ? "更新理由" : "选择")</button>
-                                    </form>
+                                    @* 第二轮第 3 批：已过期报价不再显示“选择”按钮（服务端 SelectQuote/Submit 仍会强制校验），
+                                       删除按钮保留，便于清理失效报价。 *@
+                                    @if (!quote.IsExpired)
+                                    {
+                                        <form method="post" asp-page-handler="Select" asp-route-id="@Model.PurchaseRequest.Id" class="pf-quote-select-form">
+                                            <input type="hidden" name="quoteId" value="@quote.Id" />
+                                            <input class="form-control form-control-sm" name="reason" aria-label="选择 @quote.SupplierName 的理由" placeholder="选择理由" value="@(isSelected ? Model.PurchaseRequest.SelectionReason : "")" maxlength="500" required />
+                                            <button class="btn btn-sm btn-outline-primary" type="submit">@(isSelected ? "更新理由" : "选择")</button>
+                                        </form>
+                                    }
+                                    else
+                                    {
+                                        <span class="pf-quote-expired-hint">已过期，不能选择</span>
+                                    }
                                     <form method="post" asp-page-handler="DeleteQuote" asp-route-id="@Model.PurchaseRequest.Id" class="pf-quote-delete-form"><input type="hidden" name="quoteId" value="@quote.Id" /><button class="btn btn-sm btn-link text-danger p-0" type="submit">删除报价</button></form>
                                 }
                                 else if (isSelected)
@@ -335,8 +357,16 @@
                         <input type="hidden" name="supplierId" data-supplier-id value="" />
                     </div>
                     <div class="col-md-2"><label class="form-label" for="deliveryDays">交付天数</label><input class="form-control" id="deliveryDays" name="deliveryDays" type="number" min="0" required /></div>
-                    <div class="col-md-2"><label class="form-label" for="note">备注</label><input class="form-control" id="note" name="note" maxlength="500" placeholder="差异" /></div>
+                    @* 第二轮第 3 批：报价有效期（可选，留空=长期有效）。过期报价不能被选择/提交，服务端会强制校验。 *@
+                    <div class="col-md-2">
+                        <label class="form-label" for="validUntil">报价有效期</label>
+                        <input class="form-control" id="validUntil" name="validUntil" type="date" aria-label="报价有效期（留空表示长期有效）" />
+                        <span class="pf-hint">留空=长期有效</span>
+                    </div>
                     <div class="col-md-2"><button class="btn btn-outline-primary w-100" type="submit">添加报价</button></div>
+                </div>
+                <div class="row g-2 align-items-end mt-2">
+                    <div class="col-md-12"><label class="form-label" for="note">备注</label><input class="form-control" id="note" name="note" maxlength="500" placeholder="服务或条款差异" /></div>
                 </div>
 
                 @if (Model.PurchaseRequest.Lines.Count == 0)
@@ -358,6 +388,23 @@
                                     <td data-label="物料">
                                         <input type="hidden" name="QuoteLines[@i].RequestLineId" value="@line.Id" />
                                         <strong>@line.ItemName</strong>
+                                        @* 第二轮第 3 批：只读的“上次采购价”参考（来源=最近一次已生成采购订单的明细），
+                                           不参与本页任何金额计算；未关联档案或无历史订单时给出明确空态。 *@
+                                        @{
+                                            var priceReference = Model.GetLastPurchasePrice(line.MaterialId);
+                                        }
+                                        @if (priceReference is not null)
+                                        {
+                                            <span class="pf-row-subtitle pf-history-price">上次采购价 ¥@priceReference.UnitPrice.ToString("N2")（@priceReference.OrderNumber · @priceReference.OrderedAt.ToLocalTime().ToString("yyyy-MM-dd") · @priceReference.SupplierName）</span>
+                                        }
+                                        else if (line.MaterialId.HasValue)
+                                        {
+                                            <span class="pf-row-subtitle">暂无历史采购价</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="pf-row-subtitle">暂无历史采购价（未关联物料档案）</span>
+                                        }
                                     </td>
                                     <td data-label="规格" class="pf-muted">@(string.IsNullOrWhiteSpace(line.Specification) ? "—" : line.Specification)</td>
                                     <td data-label="数量">@line.Quantity.ToString("0.###")</td>
@@ -400,7 +447,8 @@
                     @foreach (var line in order.Lines)
                     {
                         <tr>
-                            <td data-label="物料"><strong>@line.ItemName</strong></td>
+                            @* 第二轮第 3 批：订单行来源物料档案标记（可选展示，仅用于追溯）。 *@
+                            <td data-label="物料"><strong>@line.ItemName</strong>@if (line.MaterialId.HasValue) { <span class="pf-row-subtitle">来源物料档案</span> }</td>
                             <td data-label="规格" class="pf-muted">@(string.IsNullOrWhiteSpace(line.Specification) ? "—" : line.Specification)</td>
                             <td data-label="数量">@line.Quantity.ToString("0.###")</td>
                             <td data-label="单价" class="pf-money">¥@line.UnitPrice.ToString("N2")</td>

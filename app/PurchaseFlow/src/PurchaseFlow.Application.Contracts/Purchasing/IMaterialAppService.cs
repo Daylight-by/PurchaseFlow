@@ -15,4 +15,10 @@ public interface IMaterialAppService : IApplicationService
     Task<MaterialDto> CreateAsync(CreateMaterialDto input);
     Task<MaterialDto> UpdateAsync(Guid id, UpdateMaterialDto input);
     Task<MaterialDto> SetActiveAsync(Guid id, bool isActive);
+
+    /// <summary>
+    /// 第二轮第 3 批：查询该物料最近一次采购订单的成交单价（无历史返回 null）。
+    /// 报价页面用它显示“上次采购价”，只读参考，不参与金额计算。
+    /// </summary>
+    Task<MaterialPriceReferenceDto?> GetLastPurchasePriceAsync(Guid materialId);
 }

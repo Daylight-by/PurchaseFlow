@@ -75,9 +75,23 @@ public class PurchaseOrder : FullAuditedAggregateRoot<Guid>, IMultiTenant
     /// Adds an ordered line. The order keeps its own lines, the amount of the
     /// order comes from the selected quote of the request.
     /// </summary>
+    /// <summary>
+    /// 旧重载保留：不关联物料档案（materialId=null），委托给带 materialId 的新重载，
+    /// 保证既有调用与旧测试不受影响。
+    /// </summary>
     public PurchaseOrderLine AddLine(Guid id, string itemName, string specification, decimal quantity, decimal unitPrice)
     {
-        var line = new PurchaseOrderLine(id, TenantId, Id, itemName, specification, quantity, unitPrice);
+        return AddLine(id, itemName, specification, quantity, unitPrice, materialId: null);
+    }
+
+    /// <summary>
+    /// 第二轮第 3 批：订单明细可选关联物料档案 Id，用于按物料追溯历史成交价。
+    /// 明细仍保存名称/规格快照，MaterialId 只做溯源。
+    /// </summary>
+    public PurchaseOrderLine AddLine(Guid id, string itemName, string specification, decimal quantity, decimal unitPrice,
+        Guid? materialId)
+    {
+        var line = new PurchaseOrderLine(id, TenantId, Id, itemName, specification, quantity, unitPrice, materialId);
         Lines.Add(line);
         // 明细变化后立即重算，保证落库的订单金额始终等于明细合计。
         RecalculateAmountFromLines();

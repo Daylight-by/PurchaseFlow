@@ -59,6 +59,12 @@ public class DetailsModel : PurchaseFlowPageModel
     /// </summary>
     public List<SupplierDto> Suppliers { get; private set; } = new();
 
+    /// <summary>
+    /// 第二轮第 3 批：按物料档案缓存“上次采购价”参考，供报价录入行展示。
+    /// 只读参考，不参与任何金额计算；无历史的物料不会出现在字典里（页面显示“暂无历史采购价”）。
+    /// </summary>
+    public Dictionary<Guid, MaterialPriceReferenceDto> LastPurchasePrices { get; private set; } = new();
+
     [BindProperty]
     public string OrderReference { get; set; } = string.Empty;
 
@@ -164,15 +170,19 @@ public class DetailsModel : PurchaseFlowPageModel
     /// 不再接收手填总额 Amount —— 报价总额由应用层/领域按每条报价明细小计汇总，
     /// 从入口保证“报价总额 = 明细合计”。
     /// 第二轮第 1 批：supplierId 可选；有值时服务端会校验供应商档案并按档案名称覆盖文本快照。
+    /// 第二轮第 3 批：validUntil 可选（业务日期，含当天）；为空表示长期有效，
+    /// 是否允许录入过去日期由应用层拦截（页面只负责传值）。
     /// </summary>
     public Task<IActionResult> OnPostAddQuoteAsync(Guid id, string supplierName, Guid? supplierId,
-        int deliveryDays, string? note) => RunAsync(id, () => _service.AddQuoteAsync(id, new AddSupplierQuoteDto
+        int deliveryDays, string? note, DateTime? validUntil) => RunAsync(id, () => _service.AddQuoteAsync(id, new AddSupplierQuoteDto
         {
             SupplierName = supplierName ?? string.Empty,
             // 第二轮第 1 批：空值表示沿用旧的手工文本供应商（向后兼容）；有值则关联档案。
             SupplierId = supplierId,
             DeliveryDays = deliveryDays,
             Note = note,
+            // 第二轮第 3 批：报价有效期；留空即长期有效（null）。
+            ValidUntil = validUntil,
             // P0-1：把页面逐项单价映射为报价明细输入；空行 Id 说明该输入无效，直接丢弃，
             // 是否“逐项覆盖全部需求明细”仍由领域层严格校验。
             Lines = (QuoteLines ?? new List<QuoteLineInput>())
@@ -292,6 +302,15 @@ public class DetailsModel : PurchaseFlowPageModel
     public bool IsKnownSupplier(Guid? supplierId) =>
         supplierId.HasValue && Suppliers.Any(x => x.Id == supplierId.Value);
 
+    /// <summary>
+    /// 第二轮第 3 批：取某物料档案的“上次采购价”参考；未关联档案或无历史订单时返回 null，
+    /// 页面据此显示“暂无历史采购价”。只读信息，不参与金额计算。
+    /// </summary>
+    public MaterialPriceReferenceDto? GetLastPurchasePrice(Guid? materialId) =>
+        materialId.HasValue && LastPurchasePrices.TryGetValue(materialId.Value, out var reference)
+            ? reference
+            : null;
+
     private async Task<IActionResult> RunAsync(Guid id, Func<Task> action)
     {
         try
@@ -340,6 +359,24 @@ public class DetailsModel : PurchaseFlowPageModel
             Page = 1,
             PageSize = 200
         })).Items;
+
+        // 第二轮第 3 批：报价录入行展示“上次采购价”（最近一次已生成采购订单的成交单价）。
+        // 对当前明细里不同的物料档案各查一次，缓存成字典避免视图里重复调用服务；
+        // 查询结果只读参考，不参与任何金额计算；无历史的物料不写入字典，页面显示空态。
+        LastPurchasePrices = new Dictionary<Guid, MaterialPriceReferenceDto>();
+        var materialIds = PurchaseRequest.Lines
+            .Where(line => line.MaterialId.HasValue)
+            .Select(line => line.MaterialId!.Value)
+            .Distinct()
+            .ToList();
+        foreach (var materialId in materialIds)
+        {
+            var reference = await _materialService.GetLastPurchasePriceAsync(materialId);
+            if (reference is not null)
+            {
+                LastPurchasePrices[materialId] = reference;
+            }
+        }
 
         CanEdit = PurchaseRequest.BuyerUserId == _currentUser.Id &&
                   (PurchaseRequest.Status is PurchaseRequestStatus.Draft or PurchaseRequestStatus.Returned) &&

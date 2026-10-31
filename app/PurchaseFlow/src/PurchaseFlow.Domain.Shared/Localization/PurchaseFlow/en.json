@@ -34,6 +34,7 @@
     "PurchaseFlow:DuplicateMaterialCode": "This material code already exists.",
     "PurchaseFlow:MaterialInactive": "This material is inactive and cannot be used for new purchase lines.",
     "PurchaseFlow:SecondApprovalRequiresDifferentUser": "The second approval must be performed by a different user.",
+    "PurchaseFlow:QuoteExpired": "This supplier quote has expired and cannot be selected or submitted.",
     "Permission:MasterData": "View supplier and material master data",
     "Permission:ManageMasterData": "Manage supplier and material master data",
     "Permission:ApproveHighValue": "Approve high-value purchase requests (second level)",

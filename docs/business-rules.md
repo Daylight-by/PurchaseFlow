@@ -5,7 +5,7 @@
 ## 一条可演示的流程
 
 1. 采购员创建采购需求，填写关联销售单号、预计销售金额和需求说明。
-2. 采购员为至少两家供应商报价：按当前需求明细逐项录入供应商报价单价，报价合计由服务端按明细自动汇总（不再手填总额），并填写供应商名称、交付天数和备注；供应商可从供应商档案选择，名称仍作为快照保存，也可继续手工填写。
+2. 采购员为至少两家供应商报价：按当前需求明细逐项录入供应商报价单价，报价合计由服务端按明细自动汇总（不再手填总额），并填写供应商名称、交付天数和备注；供应商可从供应商档案选择，名称仍作为快照保存，也可继续手工填写；报价可选填有效期（UTC 业务日期、含当天，留空=长期有效）。
 3. 采购员选择一条报价并填写选择理由，然后提交审核。
 4. 审核人查看两条报价、选择理由和预计毛利，做一级批准或退回并填写意见；采购金额 ≤ ¥50,000 时一级批准即最终通过并生成订单，> ¥50,000 时进入二级待审，需另一位具备二级审批权限的人再批准后才生成订单。
 5. 已批准的需求冻结；退回的需求可修改后重新提交。每次提交、一级/二级批准和退回均写入业务操作记录。
@@ -28,6 +28,8 @@
 - 采购员只能修改自己创建的需求；审核员可以审核同一租户内的待审核需求，但不能因此获得编辑权限。
 - 所有业务记录属于当前租户；通过另一租户的 ID 请求也不能读取或修改。
 - 提交和审核操作中的状态与业务记录由同一个 EF Core DbContext 在一个保存批次中写入。SQLite 演示版沿用 ABP 模板的非事务性 UoW 配置；若切换到正式数据库，需重新验证事务与并发行为。
+- 报价有效期：`SupplierQuote.ValidUntil` 为可选业务日期（UTC，含当天，`NULL`=长期有效）。新增报价不允许过去日期（`QuoteExpired`）；已过期报价不能被选择或提交（`QuoteExpired`）；有效期当天仍有效，从次日 00:00 UTC 起失效。
+- 历史采购价：采购订单明细通过可空 `MaterialId` 记录来源物料（订单生成时从所选报价对应的需求行继承），`IMaterialAppService.GetLastPurchasePriceAsync` 按物料返回最近一次已生成订单的成交单价、数量、订单号、供应商与下单时间；该参考只读，不参与金额、审批或毛利计算。
 
 ## 主数据：供应商档案与物料档案
 
@@ -43,7 +45,7 @@
 
 浏览器实验台按当前集合归一化金额和交期，默认 70/30 加权；全部相同的指标均为 100 分。它只改变临时排名，不发写请求、不保存权重、不替换服务端选择。当前项目运行时不调用 AI 决策。
 
-Dashboard 在当前租户范围内统计数据；已批准采购额和预计毛利只包含选中报价确实属于该需求的记录。简报取当前详情 DTO，打印后是当时的快照，不能替代电子签章或不可篡改归档。第三批新增分级审批：`AppPurchaseRequests` 增加可空列 `FirstApproverUserId`（只记录一级审批人，不建外键，迁移 `AddApprovalLevels`）；状态枚举在末尾追加 `PendingSecondApproval = 4`，旧数据的状态值不变。第二批新增 `AppSuppliers`、`AppMaterials` 两张档案表，以及三列可空引用（`AppPurchaseRequestLines.MaterialId`、`AppSupplierQuotes.SupplierId`、`AppPurchaseOrders.SupplierId`），对应迁移为 `AddMasterData`；这些引用列不建数据库外键，历史单据优先。此前一批新增 `AppSupplierQuoteLines` 报价明细表，并把 `AppPurchaseOrders.OrderNumber` 上限从 64 扩到 128（迁移 `AddSupplierQuoteLines`）。
+Dashboard 在当前租户范围内统计数据；已批准采购额和预计毛利只包含选中报价确实属于该需求的记录。简报取当前详情 DTO，打印后是当时的快照，不能替代电子签章或不可篡改归档。第四批新增报价有效期与历史采购价：`AppSupplierQuotes.ValidUntil`、`AppPurchaseOrderLines.MaterialId` 两列（均可空、不建外键，迁移 `AddQuoteValidityAndPriceHistory`）。第三批新增分级审批：`AppPurchaseRequests` 增加可空列 `FirstApproverUserId`（只记录一级审批人，不建外键，迁移 `AddApprovalLevels`）；状态枚举在末尾追加 `PendingSecondApproval = 4`，旧数据的状态值不变。第二批新增 `AppSuppliers`、`AppMaterials` 两张档案表，以及三列可空引用（`AppPurchaseRequestLines.MaterialId`、`AppSupplierQuotes.SupplierId`、`AppPurchaseOrders.SupplierId`），对应迁移为 `AddMasterData`；这些引用列不建数据库外键，历史单据优先。此前一批新增 `AppSupplierQuoteLines` 报价明细表，并把 `AppPurchaseOrders.OrderNumber` 上限从 64 扩到 128（迁移 `AddSupplierQuoteLines`）。
 
 ## 示例金额
 
@@ -52,5 +54,7 @@ Dashboard 在当前租户范围内统计数据；已批准采购额和预计毛�
 低金额对照示例：销售金额 40,000 元；需求明细一条为办公椅 2 把 × 15,000 元 = 30,000 元；A 报价 2 × 14,000 = 28,000 元（≤ ¥50,000），B 报价 2 × 15,000 = 30,000 元；选 A 后审核员一级批准直接变为已批准并生成 28,000 元订单。
 
 演示主数据（DbMigrator 播种、按编码幂等）：供应商 SUP-001 华东办公家具（评级 A，账期 30 天）、SUP-002 南方办公（B，15 天）、SUP-003 北方机电（B，45 天）；物料 MAT-001 办公椅（人体工学，把）、MAT-002 会议桌（2.4m，张）、MAT-003 深沟球轴承（6205-2RS，个）、MAT-004 骨架油封（NBR 20x3，个）。这些档案用于演示“从档案选择”，不改变单据上的名称/规格快照口径。
+
+报价有效期与历史采购价演示：为 A 报价填写有效期=今天（页面显示“有效至 yyyy-MM-dd”）、B 留空（“长期有效”）；把有效期填成昨天再保存会被拒绝（`QuoteExpired`），已过期报价也不能被选择或提交。完成第一单后，新建含同一物料的需求，报价录入区显示“上次采购价”=上一订单成交单价及订单号（`GetLastPurchasePriceAsync`，只读参考，不参与金额计算）。
 
 

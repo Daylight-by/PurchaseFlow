@@ -140,6 +140,9 @@ public class PurchaseFlowDbContext :
             b.Property(x => x.SupplierName).IsRequired().HasMaxLength(100);
             b.Property(x => x.Amount).HasPrecision(18, 2);
             b.Property(x => x.Note).HasMaxLength(500);
+            // 第二轮第 3 批：报价有效期（业务日期，可空=长期有效）。按日期比较过期，
+            // 存 TEXT 落库即可；历史报价为空表示长期有效。
+            b.Property(x => x.ValidUntil);
             b.HasOne<PurchaseRequest>()
                 .WithMany(x => x.Quotes)
                 .HasForeignKey(x => x.PurchaseRequestId)
@@ -233,6 +236,10 @@ public class PurchaseFlowDbContext :
         {
             b.ToTable(PurchaseFlowConsts.DbTablePrefix + "PurchaseOrderLines", PurchaseFlowConsts.DbSchema);
             b.ConfigureByConvention();
+            // 第二轮第 3 批：订单明细的来源物料档案 Id（可空、不建外键）。
+            // 用途是按物料追溯历史成交价；档案可停用/更名，历史订单必须保留，
+            // 因此这里只存 Id 做溯源，约束由应用层负责。
+            b.Property(x => x.MaterialId);
             b.Property(x => x.ItemName).IsRequired().HasMaxLength(100);
             b.Property(x => x.Specification).HasMaxLength(100);
             b.Property(x => x.Quantity).HasPrecision(18, 3);

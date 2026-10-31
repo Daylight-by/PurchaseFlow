@@ -174,6 +174,10 @@ public class PurchaseRequestAppService : ApplicationService, IPurchaseRequestApp
             Amount = x.Amount,
             DeliveryDays = x.DeliveryDays,
             Note = x.Note,
+            // 第二轮第 3 批：报价有效期与“服务端按 UTC 当前日期判定的过期状态”，
+            // 页面据此显示“长期有效/有效至 yyyy-MM-dd/已过期”。
+            ValidUntil = x.ValidUntil,
+            IsExpired = x.IsExpired(DateTime.UtcNow),
             ExpectedGrossProfit = request.SaleAmount - x.Amount,
             CostPremiumToLowest = cheapest is null ? 0 : x.Amount - cheapest.Amount,
             // P0-1：把逐项报价明细一并返回，页面才能逐项展示“报价合计 = 明细合计”。
@@ -296,13 +300,18 @@ public class PurchaseRequestAppService : ApplicationService, IPurchaseRequestApp
             supplierId = supplier.Id;
         }
 
+        // 第二轮第 3 批：新增报价时若有效期已早于今天（UTC）直接拒绝，
+        // 避免录入“出生即过期”的报价。领域层保持宽松（导入历史报价/测试需要）。
+        if (input.ValidUntil.HasValue && input.ValidUntil.Value.Date < DateTime.UtcNow.Date)
+            throw new BusinessException(PurchaseFlowErrors.QuoteExpired);
+
         // P0-1：客户端只提交“需求明细 Id + 报价单价”，报价明细行 Id 由服务端生成，
         // 报价总额由领域按明细汇总 —— 接口不再接收手填总额。
         var quotedLines = input.Lines
             .Select(line => (Id: GuidGenerator.Create(), RequestLineId: line.RequestLineId, UnitPrice: line.UnitPrice))
             .ToList();
         var quote = request.AddQuote(GuidGenerator.Create(), supplierName, input.DeliveryDays, input.Note,
-            quotedLines, supplierId);
+            quotedLines, supplierId, input.ValidUntil);
         await _requests.UpdateAsync(request);
         return quote.Id;
     }
@@ -319,7 +328,8 @@ public class PurchaseRequestAppService : ApplicationService, IPurchaseRequestApp
     public async Task SelectQuoteAsync(Guid id, SelectSupplierQuoteDto input)
     {
         var request = await GetOwnedRequestAsync(id);
-        request.SelectQuote(input.QuoteId, input.Reason);
+        // 第二轮第 3 批：传入当前 UTC 时间，由领域校验收选报价未过期。
+        request.SelectQuote(input.QuoteId, input.Reason, DateTime.UtcNow);
         await _requests.UpdateAsync(request);
     }
 
@@ -327,7 +337,8 @@ public class PurchaseRequestAppService : ApplicationService, IPurchaseRequestApp
     public async Task SubmitAsync(Guid id)
     {
         var request = await GetOwnedRequestAsync(id);
-        request.Submit();
+        // 第二轮第 3 批：提交时同样校验所选报价未过期（过期 → QuoteExpired）。
+        request.Submit(DateTime.UtcNow);
         await _requests.UpdateAsync(request);
         await AddEventAsync(id, "Submitted", request.SelectionReason);
     }
@@ -413,8 +424,19 @@ public class PurchaseRequestAppService : ApplicationService, IPurchaseRequestApp
 
         // P0-1：订单明细取所选报价的逐项成交单价，不再使用需求行的预算单价；
         // AddLine 会按明细重算订单金额，使订单总额与订单明细合计严格一致。
+        // 第二轮第 3 批：按报价明细的来源需求行（PurchaseRequestLineId）把物料的
+        // MaterialId 继承到订单明细，供“历史采购价”按物料追溯；旧报价来源为空则不带。
+        var requestLinesById = request.Lines.ToDictionary(x => x.Id);
         foreach (var line in selectedQuote.Lines)
-            order.AddLine(GuidGenerator.Create(), line.ItemName, line.Specification, line.Quantity, line.UnitPrice);
+        {
+            Guid? materialId = null;
+            if (line.PurchaseRequestLineId is { } requestLineId &&
+                requestLinesById.TryGetValue(requestLineId, out var requestLine))
+                materialId = requestLine.MaterialId;
+
+            order.AddLine(GuidGenerator.Create(), line.ItemName, line.Specification, line.Quantity, line.UnitPrice,
+                materialId);
+        }
 
         // 兜底断言：订单金额必须等于订单明细合计，不一致说明金额来源被绕过。
         if (order.Amount != order.Lines.Sum(x => x.Subtotal))
@@ -446,6 +468,8 @@ public class PurchaseRequestAppService : ApplicationService, IPurchaseRequestApp
             Lines = lines.Select(line => new PurchaseOrderLineDto
             {
                 Id = line.Id,
+                // 第二轮第 3 批：订单明细的来源物料档案 Id（旧订单行为 null）。
+                MaterialId = line.MaterialId,
                 ItemName = line.ItemName,
                 Specification = line.Specification,
                 Quantity = line.Quantity,

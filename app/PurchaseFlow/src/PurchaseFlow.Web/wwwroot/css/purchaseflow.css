@@ -52,3 +52,9 @@
 .pf-row-editing{background:#f6faf8}/* 第二轮第 2 批：二级待审状态/阶段配色。紫色区别于“待审核”的橙色，提示该请求已过一级、等换人复核。 */
 .pf-status-pendingsecondapproval{background:#f1ebfa;color:#6f4fa8}
 .pf-stage-pendingsecondapproval,.pf-stage-bg-pendingsecondapproval{background:#8a6bbf}
+/* 第二轮第 3 批：报价有效期标签与“上次采购价”参考样式。
+   有效期用胶囊标签区分长期有效/有效至/已过期；历史价是只读参考，用低饱和绿色避免与金额主数据混淆。 */
+.pf-quote-validity{display:inline-block;margin-top:5px;font-size:9px;padding:2px 8px;border-radius:999px;background:#eef4f9;color:#5b7489;line-height:1.5}
+.pf-quote-validity-expired{background:#fbedeb;color:#b45747;font-weight:700}
+.pf-quote-expired-hint{display:block;font-size:9px;color:#b45747;font-weight:600;margin-bottom:5px}
+.pf-history-price{color:#5f7a4f}

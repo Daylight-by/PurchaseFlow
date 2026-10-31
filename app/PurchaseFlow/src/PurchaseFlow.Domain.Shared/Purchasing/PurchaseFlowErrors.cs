@@ -31,6 +31,9 @@ public static class PurchaseFlowErrors
 
     // 第二轮第 2 批（分级审批）：二级审批必须换人，避免同一个人绕过两级控制。
     public const string SecondApprovalRequiresDifferentUser = "PurchaseFlow:SecondApprovalRequiresDifferentUser";
+
+    // 第二轮第 3 批（报价有效期）：过期报价不能选择/提交，避免用失效价格成交。
+    public const string QuoteExpired = "PurchaseFlow:QuoteExpired";
     public const string InvalidReceiptDate = "PurchaseFlow:InvalidReceiptDate";
     public const string InvalidReceiptKey = "PurchaseFlow:InvalidReceiptKey";
     public const string InvalidReceiptLines = "PurchaseFlow:InvalidReceiptLines";

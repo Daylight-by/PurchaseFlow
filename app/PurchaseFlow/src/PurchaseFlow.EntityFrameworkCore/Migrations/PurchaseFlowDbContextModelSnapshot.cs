@@ -336,6 +336,9 @@ namespace PurchaseFlow.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
+                    b.Property<Guid?>("MaterialId")
+                        .HasColumnType("TEXT");
+
                     b.Property<Guid>("PurchaseOrderId")
                         .HasColumnType("TEXT");
 
@@ -668,6 +671,9 @@ namespace PurchaseFlow.Migrations
                     b.Property<Guid?>("TenantId")
                         .HasColumnType("TEXT")
                         .HasColumnName("TenantId");
+
+                    b.Property<DateTime?>("ValidUntil")
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 

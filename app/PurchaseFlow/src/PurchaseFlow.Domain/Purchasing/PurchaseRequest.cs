@@ -185,6 +185,8 @@ public class PurchaseRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
     /// “报价合计 = 明细合计”，审批生成的订单金额也才有可信来源。
     /// 第二轮主数据：可选 supplierId 关联供应商档案（SupplierName 仍是名称快照，
     /// 应用层在传档案时已用档案名称覆盖）。
+    /// 第二轮第 3 批：末尾可选 validUntil（报价有效期，null=长期有效），
+    /// 追加在最后保证第 1/2 批的调用与测试不用改。
     /// </summary>
     public SupplierQuote AddQuote(
         Guid id,
@@ -192,7 +194,8 @@ public class PurchaseRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
         int deliveryDays,
         string? note,
         IReadOnlyList<(Guid Id, Guid RequestLineId, decimal UnitPrice)> quotedLines,
-        Guid? supplierId = null)
+        Guid? supplierId = null,
+        DateTime? validUntil = null)
     {
         EnsureEditable();
 
@@ -228,7 +231,7 @@ public class PurchaseRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
         //    AddLine 触发 RecalculateAmount；物料/规格/数量一律取需求行快照，
         //    客户端只提供单价，无法篡改快照内容。
         var quotedByRequestLineId = quotedLines.ToDictionary(x => x.RequestLineId);
-        var quote = new SupplierQuote(id, TenantId, Id, name, deliveryDays, note, supplierId);
+        var quote = new SupplierQuote(id, TenantId, Id, name, deliveryDays, note, supplierId, validUntil);
         foreach (var requestLine in Lines)
         {
             var quoted = quotedByRequestLineId[requestLine.Id];
@@ -259,13 +262,20 @@ public class PurchaseRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
         }
     }
 
-    public void SelectQuote(Guid quoteId, string reason)
+    /// <summary>
+    /// 选择报价。第二轮第 3 批：选中前校验收选报价未过期（过期 → QuoteExpired），
+    /// 避免把失效价格带入成交链路。asOfUtc 可选，默认为当前 UTC 时间；
+    /// 保留旧双参调用，测试也可传入固定时间模拟时间推进。
+    /// </summary>
+    public void SelectQuote(Guid quoteId, string reason, DateTime? asOfUtc = null)
     {
         EnsureEditable();
-        if (!Quotes.Any(x => x.Id == quoteId))
-            throw new EntityNotFoundException(typeof(SupplierQuote), quoteId);
+        var quote = Quotes.FirstOrDefault(x => x.Id == quoteId)
+            ?? throw new EntityNotFoundException(typeof(SupplierQuote), quoteId);
         if (string.IsNullOrWhiteSpace(reason))
             throw new BusinessException(PurchaseFlowErrors.NeedSelectionReason);
+        // 原校验顺序（存在性 → 理由）保持不变，过期校验放在最后，且不改动状态。
+        quote.EnsureNotExpired(asOfUtc ?? DateTime.UtcNow);
         SelectedQuoteId = quoteId;
         SelectionReason = Check.Length(reason.Trim(), nameof(reason), maxLength: 500);
     }
@@ -280,7 +290,12 @@ public class PurchaseRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
     #endregion
 
-    public void Submit()
+    /// <summary>
+    /// 提交审批。第二轮第 3 批：保持原有校验顺序不变，在最后增加“所选报价未过期”
+    /// 的硬校验（过期 → QuoteExpired），防止报价在录入后、提交前失效仍被使用。
+    /// asOfUtc 可选（默认当前 UTC 时间），测试可传固定时间模拟时间推进。
+    /// </summary>
+    public void Submit(DateTime? asOfUtc = null)
     {
         EnsureEditable();
         if (Lines.Count == 0)
@@ -291,6 +306,11 @@ public class PurchaseRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
             throw new BusinessException(PurchaseFlowErrors.NeedSelectedQuote);
         if (string.IsNullOrWhiteSpace(SelectionReason))
             throw new BusinessException(PurchaseFlowErrors.NeedSelectionReason);
+
+        var selectedQuote = Quotes.FirstOrDefault(x => x.Id == SelectedQuoteId.Value)
+            ?? throw new EntityNotFoundException(typeof(SupplierQuote), SelectedQuoteId.Value);
+        selectedQuote.EnsureNotExpired(asOfUtc ?? DateTime.UtcNow);
+
         Status = PurchaseRequestStatus.PendingReview;
         // 第二轮第 2 批：重新提交等于开启新一轮审批，必须清空上一轮的一级审批人，
         // 否则“退回→改金额→重新提交”后可能错误地沿用旧审批人、或换人规则被旧值干扰。

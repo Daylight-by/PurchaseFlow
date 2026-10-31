@@ -122,3 +122,17 @@ public class MaterialListDto
     public int Page { get; set; }
     public int PageSize { get; set; }
 }
+
+/// <summary>
+/// 第二轮第 3 批：某物料最近一次已下采购订单的成交参考价。
+/// 用于报价录入时给采购员一个真实的历史价格锚点，避免“凭空报价”。
+/// </summary>
+public class MaterialPriceReferenceDto
+{
+    public Guid MaterialId { get; set; }
+    public decimal UnitPrice { get; set; }
+    public decimal Quantity { get; set; }
+    public string OrderNumber { get; set; } = string.Empty;
+    public string SupplierName { get; set; } = string.Empty;
+    public DateTime OrderedAt { get; set; }
+}

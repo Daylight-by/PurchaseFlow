@@ -20,9 +20,18 @@ public class MaterialAppService : ApplicationService, IMaterialAppService
 {
     private readonly IRepository<Material, Guid> _materials;
 
-    public MaterialAppService(IRepository<Material, Guid> materials)
+    // 第二轮第 3 批：历史采购价要查“订单明细 join 采购订单”，因此注入订单侧仓储只读查询。
+    private readonly IRepository<PurchaseOrderLine, Guid> _orderLines;
+    private readonly IRepository<PurchaseOrder, Guid> _orders;
+
+    public MaterialAppService(
+        IRepository<Material, Guid> materials,
+        IRepository<PurchaseOrderLine, Guid> orderLines,
+        IRepository<PurchaseOrder, Guid> orders)
     {
         _materials = materials;
+        _orderLines = orderLines;
+        _orders = orders;
     }
 
     public async Task<MaterialListDto> GetListAsync(MaterialListInput input)
@@ -104,6 +113,36 @@ public class MaterialAppService : ApplicationService, IMaterialAppService
             material.Deactivate();
         await _materials.UpdateAsync(material);
         return Map(material);
+    }
+
+    /// <summary>
+    /// 第二轮第 3 批：查询该物料最近一次已生成采购订单的成交明细，作为报价录入时的
+    /// 历史价格参考（只读，不参与任何金额计算）。
+    /// 实现：订单明细 join 采购订单，按明细上的 MaterialId 过滤（该字段在订单生成时
+    /// 从报价来源需求行继承），再按订单创建时间倒序取第一条；无历史返回 null。
+    /// 沿用类级 MasterData 查看权限（所有业务角色都有）。
+    /// </summary>
+    public async Task<MaterialPriceReferenceDto?> GetLastPurchasePriceAsync(Guid materialId)
+    {
+        var orderLinesQuery = await _orderLines.GetQueryableAsync();
+        var ordersQuery = await _orders.GetQueryableAsync();
+
+        var latest = await AsyncExecuter.FirstOrDefaultAsync(
+            from line in orderLinesQuery
+            join order in ordersQuery on line.PurchaseOrderId equals order.Id
+            where line.MaterialId == materialId
+            orderby order.CreationTime descending
+            select new MaterialPriceReferenceDto
+            {
+                MaterialId = materialId,
+                UnitPrice = line.UnitPrice,
+                Quantity = line.Quantity,
+                OrderNumber = order.OrderNumber,
+                SupplierName = order.SupplierName,
+                OrderedAt = order.CreationTime
+            });
+
+        return latest;
     }
 
     /// <summary>
