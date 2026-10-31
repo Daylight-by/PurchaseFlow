@@ -194,6 +194,35 @@ public class GoodsReceipt_Page_Tests : PurchaseFlowWebTestBase
         GetMetric(afterReceipt, "预计毛利").ShouldBe(grossProfit);
     }
 
+    [Fact]
+    public async Task The_receipt_line_inputs_belong_to_the_receipt_form()
+    {
+        await SignInAsync();
+        var requestId = await CreateRequestWithTwoLinesAsync();
+        await AddTwoQuotesAsync(requestId);
+        await SelectAndApproveAsync(requestId);
+
+        var html = await GetHtmlAsync($"/Purchasing/Details/{requestId}");
+        var document = new HtmlDocument();
+        document.LoadHtml(html);
+
+        // 回归：收货明细表格在表单外，必须用 form 属性关联到收货表单，
+        // 否则浏览器提交时会丢失 ReceiptLines，后端点“提交收货”永远报校验错误。
+        var form = document.DocumentNode.SelectSingleNode("//form[contains(@action,'handler=Receive')]");
+        form.ShouldNotBeNull();
+        form!.GetAttributeValue("id", string.Empty).ShouldBe("receiptForm");
+
+        var quantity = document.DocumentNode.SelectSingleNode(
+            "//input[contains(@name,'ReceiptLines[0].Quantity')]");
+        quantity.ShouldNotBeNull();
+        quantity!.GetAttributeValue("form", string.Empty).ShouldBe("receiptForm");
+
+        var selected = document.DocumentNode.SelectSingleNode(
+            "//input[contains(@name,'ReceiptLines[0].Selected')]");
+        selected.ShouldNotBeNull();
+        selected!.GetAttributeValue("form", string.Empty).ShouldBe("receiptForm");
+    }
+
     private async Task SignInAsync()
     {
         var loginPage = await GetHtmlAsync("/Account/Login");

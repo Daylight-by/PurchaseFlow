@@ -488,12 +488,15 @@
                                     <td data-label="累计已收">@receiptLine.ReceivedQuantity.ToString("0.###")</td>
                                     <td data-label="剩余">@receiptLine.RemainingQuantity.ToString("0.###")</td>
                                     <td data-label="本次收货">
-                                        <input type="hidden" name="ReceiptLines[@i].PurchaseOrderLineId" value="@input.PurchaseOrderLineId" />
+                                        @* 修复：收货明细表格位于表单之外，浏览器不会把它们随表单提交。
+                                           用 HTML5 的 form 属性把控件显式关联到 receiptForm，
+                                           否则页面点“提交收货”会丢失明细、后端报“请检查收货数量”。 *@
+                                        <input type="hidden" form="receiptForm" name="ReceiptLines[@i].PurchaseOrderLineId" value="@input.PurchaseOrderLineId" />
                                         @if (Model.CanRegisterReceipts && receiptLine.RemainingQuantity > 0)
                                         {
                                             <div class="d-flex gap-2 align-items-center">
-                                                <input class="form-check-input" type="checkbox" name="ReceiptLines[@i].Selected" value="true" @(input.Selected ? "checked" : null) aria-label="选择 @receiptLine.ItemName" />
-                                                <input class="form-control form-control-sm" name="ReceiptLines[@i].Quantity" value="@input.Quantity" type="number" min="0.001" max="@receiptLine.RemainingQuantity" step="0.001" aria-label="@receiptLine.ItemName 本次收货数量" />
+                                                <input class="form-check-input" form="receiptForm" type="checkbox" name="ReceiptLines[@i].Selected" value="true" @(input.Selected ? "checked" : null) aria-label="选择 @receiptLine.ItemName" />
+                                                <input class="form-control form-control-sm" form="receiptForm" name="ReceiptLines[@i].Quantity" value="@input.Quantity" type="number" min="0.001" max="@receiptLine.RemainingQuantity" step="0.001" aria-label="@receiptLine.ItemName 本次收货数量" />
                                             </div>
                                         }
                                         else
@@ -509,7 +512,7 @@
 
                     @if (Model.CanRegisterReceipts && !receiptState.IsFullyReceived)
                     {
-                        <form method="post" asp-page-handler="Receive" asp-route-id="@Model.PurchaseRequest.Id" class="row g-2 align-items-end mt-3">
+                        <form method="post" id="receiptForm" asp-page-handler="Receive" asp-route-id="@Model.PurchaseRequest.Id" class="row g-2 align-items-end mt-3">
                             <div class="col-md-3"><label class="form-label" for="receiptDate">业务收货日期</label><input class="form-control" id="receiptDate" name="ReceiptDate" value="@Model.ReceiptDate.ToString("yyyy-MM-dd")" type="date" required /></div>
                             <div class="col-md-3"><label class="form-label" for="receiptKey">请求幂等标识</label><input class="form-control" id="receiptKey" name="ReceiptIdempotencyKey" value="@Model.ReceiptIdempotencyKey" maxlength="128" required /></div>
                             <div class="col-md-4"><label class="form-label" for="receiptNote">备注</label><input class="form-control" id="receiptNote" name="ReceiptNote" value="@Model.ReceiptNote" maxlength="500" /></div>

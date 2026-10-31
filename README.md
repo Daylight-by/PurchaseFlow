@@ -76,7 +76,7 @@ dotnet run
 9. 对匹配发票发起付款申请（默认全额），管理员批准后登记付款；确认付款申请与发票都变为“已付款”。
 10. 尝试把发票单价改成与订单不一致、或开票数量超过已收货未开票数量，确认被拒绝（`InvoicePriceMismatch` / `InvoiceQuantityExceedsReceived`）。
 
-在 `app/PurchaseFlow` 目录执行 `dotnet test PurchaseFlow.slnx` 运行测试。构建 0 错误、0 警告，153 项测试通过（Domain 58、Application 11、EF Core 65、Web 19），包含 Dashboard 的 SQLite 汇总、队列排序、分级审批、报价有效期与历史采购价、三单匹配与付款、租户隔离。浏览器另外检查了主要角色操作、创建者归属、退回重提、批准后冻结、表单错误、筛选分页、实验台无请求与选择不变，以及 1440/1280/768/390/360 宽度的六类页面。这些是已测场景，不代表生产级覆盖。
+在 `app/PurchaseFlow` 目录执行 `dotnet test PurchaseFlow.slnx` 运行测试。构建 0 错误、0 警告，154 项测试通过（Domain 58、Application 11、EF Core 65、Web 20），包含 Dashboard 的 SQLite 汇总、队列排序、分级审批、报价有效期与历史采购价、三单匹配与付款、租户隔离。浏览器另外检查了主要角色操作、创建者归属、退回重提、批准后冻结、表单错误、筛选分页、实验台无请求与选择不变，以及 1440/1280/768/390/360 宽度的六类页面。这些是已测场景，不代表生产级覆盖。
 
 业务约束见 [业务规则](docs/business-rules.md)。优先阅读 [V2 快速学习路线](docs/quick-learning-v2.md)，更长的基础安排见 [五天学习手册](docs/learning-path.md)。
 
