@@ -53,6 +53,9 @@
         <footer class="pf-footer"><span>PurchaseFlow <span class="pf-footer-dot">·</span> 采购询价与审核</span><span>模拟业务规则 · 金额单位人民币</span></footer>
     </div>
     <abp-script-bundle name="@BasicThemeBundles.Scripts.Global" />
+    @* P1-2：pf-money.js 必须排在 purchaseflow.js 之前，后者重算金额时依赖 window.pfMoney；
+       两者都用 defer，浏览器会按出现顺序执行，顺序即依赖关系。 *@
+    <script src="~/js/pf-money.js" asp-append-version="true" defer></script>
     <script src="~/js/purchaseflow.js" asp-append-version="true" defer></script>
     @await RenderSectionAsync("scripts", required: false)
 </body>

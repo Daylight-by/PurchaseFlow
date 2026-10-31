@@ -13,7 +13,10 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>
     <None Remove="appsettings.secrets.json" />
-    <Content Include="appsettings.secrets.json">
+    <!-- The secrets file is optional: it is not part of the repository, so a
+         fresh clone must still build. When a developer provides the file it is
+         copied next to the app. -->
+    <Content Include="appsettings.secrets.json" Condition="Exists('appsettings.secrets.json')">
       <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Content>

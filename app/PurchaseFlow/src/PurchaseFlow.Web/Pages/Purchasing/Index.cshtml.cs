@@ -39,36 +39,6 @@ public class IndexModel : PurchaseFlowPageModel
         await LoadAsync();
     }
 
-    public async Task<IActionResult> OnPostCreateAsync(string orderReference, string description, decimal saleAmount)
-    {
-        try
-        {
-            var id = await _service.CreateAsync(new CreatePurchaseRequestDto
-            {
-                OrderReference = orderReference ?? string.Empty,
-                Description = description ?? string.Empty,
-                SaleAmount = saleAmount
-            });
-            return RedirectToPage("/Purchasing/Details", new { id });
-        }
-        catch (BusinessException ex)
-        {
-            Error = _localizer[ex.Code ?? "Error"];
-            await LoadAsync();
-            return Page();
-        }
-        catch (AbpValidationException)
-        {
-            Error = "请填写销售单号、需求说明，并输入有效的销售金额。";
-            await LoadAsync();
-            return Page();
-        }
-        catch (AbpAuthorizationException)
-        {
-            return Forbid();
-        }
-    }
-
     public static string StatusText(PurchaseRequestStatus status) => status switch
     {
         PurchaseRequestStatus.Draft => "草稿",

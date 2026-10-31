@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using PurchaseFlow.Purchasing;
+using Volo.Abp.Domain.Entities;
 using Volo.Abp.Domain.Repositories;
 using Volo.Abp.MultiTenancy;
 using Xunit;
@@ -14,15 +15,13 @@ public class PurchaseDashboardTests : PurchaseFlowEntityFrameworkCoreTestBase
 {
     private readonly ICurrentTenant _currentTenant;
     private readonly IPurchaseRequestAppService _service;
-    private readonly IRepository<PurchaseRequest, Guid> _requests;
-    private readonly IRepository<SupplierQuote, Guid> _quotes;
+    private readonly IPurchaseRequestRepository _requests;
 
     public PurchaseDashboardTests()
     {
         _currentTenant = GetRequiredService<ICurrentTenant>();
         _service = GetRequiredService<IPurchaseRequestAppService>();
-        _requests = GetRequiredService<IRepository<PurchaseRequest, Guid>>();
-        _quotes = GetRequiredService<IRepository<SupplierQuote, Guid>>();
+        _requests = GetRequiredService<IPurchaseRequestRepository>();
     }
 
     [Fact]
@@ -45,27 +44,27 @@ public class PurchaseDashboardTests : PurchaseFlowEntityFrameworkCoreTestBase
                 for (var index = 1; index <= 6; index++)
                 {
                     var request = await CreateRequestAsync(tenantId, $"DASH-PENDING-{index}", 1000m + index);
-                    var first = await AddQuoteAsync(tenantId, request.Id, $"Pending-{index}-A", 600m, 5);
-                    await AddQuoteAsync(tenantId, request.Id, $"Pending-{index}-B", 650m, 7);
+                    var first = await AddQuoteAsync(request, $"Pending-{index}-A", 600m, 5);
+                    await AddQuoteAsync(request, $"Pending-{index}-B", 650m, 7);
                     request.SelectQuote(first.Id, "价格更低");
-                    request.Submit(2);
+                    request.Submit();
                     await _requests.UpdateAsync(request, autoSave: true);
                     pendingRequests.Add(request);
                 }
 
                 approved = await CreateRequestAsync(tenantId, "DASH-APPROVED", 1000m);
-                var approvedQuote = await AddQuoteAsync(tenantId, approved.Id, "Approved-A", 600m, 4);
-                await AddQuoteAsync(tenantId, approved.Id, "Approved-B", 650m, 6);
+                var approvedQuote = await AddQuoteAsync(approved, "Approved-A", 600m, 4);
+                await AddQuoteAsync(approved, "Approved-B", 650m, 6);
                 approved.SelectQuote(approvedQuote.Id, "价格更低");
-                approved.Submit(2);
+                approved.Submit();
                 approved.Approve();
                 await _requests.UpdateAsync(approved, autoSave: true);
 
                 returned = await CreateRequestAsync(tenantId, "DASH-RETURNED", 1000m);
-                var returnedQuote = await AddQuoteAsync(tenantId, returned.Id, "Returned-A", 700m, 4);
-                await AddQuoteAsync(tenantId, returned.Id, "Returned-B", 750m, 6);
+                var returnedQuote = await AddQuoteAsync(returned, "Returned-A", 700m, 4);
+                await AddQuoteAsync(returned, "Returned-B", 750m, 6);
                 returned.SelectQuote(returnedQuote.Id, "价格更低");
-                returned.Submit(2);
+                returned.Submit();
                 returned.Return();
                 await _requests.UpdateAsync(returned, autoSave: true);
             }
@@ -73,10 +72,10 @@ public class PurchaseDashboardTests : PurchaseFlowEntityFrameworkCoreTestBase
             using (_currentTenant.Change(otherTenantId))
             {
                 otherTenantRequest = await CreateRequestAsync(otherTenantId, "DASH-OTHER", 999m);
-                var otherQuote = await AddQuoteAsync(otherTenantId, otherTenantRequest.Id, "Other-A", 100m, 1);
-                await AddQuoteAsync(otherTenantId, otherTenantRequest.Id, "Other-B", 110m, 2);
+                var otherQuote = await AddQuoteAsync(otherTenantRequest, "Other-A", 100m, 1);
+                await AddQuoteAsync(otherTenantRequest, "Other-B", 110m, 2);
                 otherTenantRequest.SelectQuote(otherQuote.Id, "价格更低");
-                otherTenantRequest.Submit(2);
+                otherTenantRequest.Submit();
                 otherTenantRequest.Approve();
                 await _requests.UpdateAsync(otherTenantRequest, autoSave: true);
             }
@@ -108,54 +107,74 @@ public class PurchaseDashboardTests : PurchaseFlowEntityFrameworkCoreTestBase
     }
 
     [Fact]
-    public async Task Dashboard_excludes_approved_quote_from_another_request()
+    public async Task Dashboard_only_counts_a_quote_that_belongs_to_the_approved_request()
     {
         var tenantId = Guid.NewGuid();
-        PurchaseRequest requestWithInvalidSelection = null!;
 
         await WithUnitOfWorkAsync(async () =>
         {
             using (_currentTenant.Change(tenantId))
             {
-                requestWithInvalidSelection = await CreateRequestAsync(tenantId, "DASH-INVALID", 1000m);
-                await AddQuoteAsync(tenantId, requestWithInvalidSelection.Id, "Actual-A", 500m, 5);
-
-                var otherRequest = await CreateRequestAsync(tenantId, "DASH-FOREIGN-QUOTE", 1000m);
-                var foreignQuote = await AddQuoteAsync(tenantId, otherRequest.Id, "Foreign-A", 100m, 2);
-
-                requestWithInvalidSelection.SelectQuote(foreignQuote.Id, "跨需求错误选择");
-                requestWithInvalidSelection.Submit(2);
-                requestWithInvalidSelection.Approve();
-                await _requests.UpdateAsync(requestWithInvalidSelection, autoSave: true);
+                var request = await CreateRequestAsync(tenantId, "DASH-VALID", 1000m);
+                var quote = await AddQuoteAsync(request, "Valid-A", 500m, 5);
+                await AddQuoteAsync(request, "Valid-B", 560m, 7);
+                request.SelectQuote(quote.Id, "价格更低");
+                request.Submit();
+                request.Approve();
+                await _requests.UpdateAsync(request, autoSave: true);
             }
         });
 
         var dashboard = await WithTenantAsync(tenantId, () => _service.GetDashboardAsync());
 
-        Assert.Equal(2, dashboard.TotalCount);
         Assert.Equal(1, dashboard.ApprovedCount);
-        Assert.Equal(2, dashboard.TotalQuoteCount);
-        Assert.Equal(0m, dashboard.ApprovedPurchaseAmount);
-        Assert.Equal(0m, dashboard.ApprovedExpectedGrossProfit);
+        Assert.Equal(500m, dashboard.ApprovedPurchaseAmount);
+        Assert.Equal(500m, dashboard.ApprovedExpectedGrossProfit);
+    }
+
+    [Fact]
+    public async Task A_quote_of_another_request_can_not_be_selected()
+    {
+        var tenantId = Guid.NewGuid();
+        Guid foreignQuoteId = Guid.NewGuid();
+
+        await WithUnitOfWorkAsync(async () =>
+        {
+            using (_currentTenant.Change(tenantId))
+            {
+                var request = await CreateRequestAsync(tenantId, "DASH-INVALID", 1000m);
+                var otherRequest = await CreateRequestAsync(tenantId, "DASH-OTHER-REQUEST", 1000m);
+                var foreignQuote = await AddQuoteAsync(otherRequest, "Foreign-A", 100m, 2);
+
+                Assert.Throws<EntityNotFoundException>(() => request.SelectQuote(foreignQuote.Id, "跨需求错误选择"));
+                await Task.CompletedTask;
+            }
+        });
     }
 
     private async Task<PurchaseRequest> CreateRequestAsync(Guid tenantId, string orderReference, decimal saleAmount)
     {
         var request = new PurchaseRequest(Guid.NewGuid(), tenantId, Guid.NewGuid(), orderReference, "仪表盘集成测试", saleAmount);
+        request.AddLine(Guid.NewGuid(), "深沟球轴承", "6205-2RS", 10, 100m);
         await _requests.InsertAsync(request, autoSave: true);
         await Task.Delay(15);
         return request;
     }
 
     private async Task<SupplierQuote> AddQuoteAsync(
-        Guid tenantId,
-        Guid requestId,
+        PurchaseRequest request,
         string supplierName,
         decimal amount,
         int deliveryDays)
     {
-        var quote = new SupplierQuote(Guid.NewGuid(), tenantId, requestId, supplierName, amount, deliveryDays, null);
-        await _quotes.InsertAsync(quote, autoSave: true);
+        // P0-1：报价改为逐项报价，这里把目标总额平均分摊到需求明细上，
+        // 保证“报价总额 = 报价明细合计”，同时保持各测试预期的报价金额不变。
+        var quotedLines = request.Lines
+            .Select(line => (Id: Guid.NewGuid(), RequestLineId: line.Id,
+                UnitPrice: amount / line.Quantity))
+            .ToList();
+        var quote = request.AddQuote(Guid.NewGuid(), supplierName, deliveryDays, null, quotedLines);
+        await _requests.UpdateAsync(request, autoSave: true);
         return quote;
     }
 
@@ -170,4 +189,3 @@ public class PurchaseDashboardTests : PurchaseFlowEntityFrameworkCoreTestBase
         });
     }
 }
-

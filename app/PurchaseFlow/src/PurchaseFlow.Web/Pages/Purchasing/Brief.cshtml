@@ -75,8 +75,37 @@
             }
         </section>
 
+        <section class="pf-print-section" aria-labelledby="lines-title">
+            <h2 id="lines-title">三、采购明细</h2>
+            @if (request.Lines.Count == 0)
+            {
+                <p class="pf-print-muted">尚无采购明细。</p>
+            }
+            else
+            {
+                <table class="pf-print-table">
+                    <thead><tr><th>物料</th><th>规格</th><th>数量</th><th>单价</th><th>小计</th></tr></thead>
+                    <tbody>
+                    @foreach (var line in request.Lines)
+                    {
+                        <tr>
+                            <td>@line.ItemName</td>
+                            <td>@(string.IsNullOrWhiteSpace(line.Specification) ? "—" : line.Specification)</td>
+                            <td>@line.Quantity.ToString("0.###")</td>
+                            <td>¥@line.UnitPrice.ToString("N2")</td>
+                            <td>¥@line.Subtotal.ToString("N2")</td>
+                        </tr>
+                    }
+                    </tbody>
+                    <tfoot>
+                        <tr><th colspan="4">采购明细汇总</th><th>¥@request.Amount.ToString("N2")</th></tr>
+                    </tfoot>
+                </table>
+            }
+        </section>
+
         <section class="pf-print-section" aria-labelledby="quotes-title">
-            <h2 id="quotes-title">三、全部报价比较</h2>
+            <h2 id="quotes-title">四、全部报价比较</h2>
             @if (request.Quotes.Count == 0)
             {
                 <p class="pf-print-muted">尚无报价记录。</p>
@@ -108,7 +137,7 @@
         </section>
 
         <section class="pf-print-section" aria-labelledby="history-title">
-            <h2 id="history-title">四、历史与操作人</h2>
+            <h2 id="history-title">五、历史与操作人</h2>
             @if (request.History.Count == 0)
             {
                 <p class="pf-print-muted">暂无操作记录。</p>

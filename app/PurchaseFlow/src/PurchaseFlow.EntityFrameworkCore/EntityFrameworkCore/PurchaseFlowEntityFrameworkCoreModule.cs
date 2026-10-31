@@ -1,8 +1,10 @@
 using System;
 using Microsoft.Extensions.DependencyInjection;
+using PurchaseFlow.Purchasing;
 using Volo.Abp.Uow;
 using Volo.Abp.AuditLogging.EntityFrameworkCore;
 using Volo.Abp.BackgroundJobs.EntityFrameworkCore;
+using Volo.Abp.Domain.Repositories;
 using Volo.Abp.EntityFrameworkCore;
 using Volo.Abp.EntityFrameworkCore.Sqlite;
 using Volo.Abp.FeatureManagement.EntityFrameworkCore;
@@ -42,6 +44,12 @@ public class PurchaseFlowEntityFrameworkCoreModule : AbpModule
                  * default repositories only for aggregate roots */
             options.AddDefaultRepositories(includeAllEntities: true);
         });
+
+        // The purchase request aggregate owns its lines and its quotes, so it
+        // needs a repository that loads the whole object graph.
+        context.Services.AddScoped<IPurchaseRequestRepository, PurchaseRequestEfCoreRepository>();
+        context.Services.AddScoped<IRepository<PurchaseRequest, Guid>>(provider =>
+            provider.GetRequiredService<IPurchaseRequestRepository>());
 
         Configure<AbpDbContextOptions>(options =>
         {

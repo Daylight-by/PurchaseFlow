@@ -1,5 +1,6 @@
 @page "{id:guid}"
 @model PurchaseFlow.Web.Pages.Purchasing.DetailsModel
+@using System.Globalization
 @using System.Linq
 @using PurchaseFlow.Purchasing
 
@@ -27,6 +28,7 @@
             <p class="pf-detail-description">@Model.PurchaseRequest.Description</p>
             <div class="pf-detail-meta">
                 <span>销售金额 <strong>¥@Model.PurchaseRequest.SaleAmount.ToString("N2")</strong></span>
+                <span>采购明细汇总 <strong>¥@Model.PurchaseRequest.Amount.ToString("N2")</strong> · @Model.PurchaseRequest.LineCount 条明细</span>
                 <span>创建于 @Model.PurchaseRequest.CreationTime.ToString("yyyy-MM-dd HH:mm")</span>
             </div>
         </div>
@@ -50,10 +52,48 @@
             <li class="@(Model.PurchaseRequest.Status is PurchaseRequestStatus.Draft or PurchaseRequestStatus.Returned ? "pf-progress-current" : "pf-progress-done")"><span class="pf-progress-index">1</span><strong>草稿</strong><small>建立需求与报价</small></li>
             <li class="@(Model.PurchaseRequest.Status == PurchaseRequestStatus.PendingReview ? "pf-progress-current" : Model.PurchaseRequest.Status == PurchaseRequestStatus.Approved ? "pf-progress-done" : "")"><span class="pf-progress-index">2</span><strong>待审核</strong><small>提交决策依据</small></li>
             <li class="@(Model.PurchaseRequest.Status == PurchaseRequestStatus.Approved ? "pf-progress-current pf-progress-done" : "")"><span class="pf-progress-index">3</span><strong>已批准</strong><small>方案进入已批准状态</small></li>
+            <li class="@(Model.PurchaseRequest.PurchaseOrder is not null ? "pf-progress-current pf-progress-done" : "")"><span class="pf-progress-index">4</span><strong>已下采购单</strong><small>按已选报价生成订单</small></li>
         </ol>
         @if (Model.PurchaseRequest.Status == PurchaseRequestStatus.Returned)
         {
             <p class="pf-progress-note">已退回，补充后重新提交</p>
+        }
+    </section>
+
+    <section class="pf-panel mb-4" aria-labelledby="lines-title">
+        <div class="pf-panel-heading">
+            <div><span class="pf-section-kicker">PURCHASE LINES</span><h2 id="lines-title">采购明细 <small>@Model.PurchaseRequest.Lines.Count 条</small></h2></div>
+            <span class="pf-hint">需求金额由明细汇总，不单独手填</span>
+        </div>
+        @if (Model.PurchaseRequest.Lines.Count == 0)
+        {
+            <div class="pf-empty-state pf-empty-state-compact"><strong>还没有采购明细</strong><span>补充物料、规格、数量与单价后，需求金额会自动汇总。</span></div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table pf-table pf-line-table align-middle mb-0">
+                    <thead><tr><th>物料</th><th>规格</th><th>数量</th><th>单价</th><th>小计</th></tr></thead>
+                    <tbody>
+                    @foreach (var line in Model.PurchaseRequest.Lines)
+                    {
+                        <tr>
+                            <td data-label="物料"><strong>@line.ItemName</strong></td>
+                            <td data-label="规格" class="pf-muted">@(string.IsNullOrWhiteSpace(line.Specification) ? "—" : line.Specification)</td>
+                            <td data-label="数量">@line.Quantity.ToString("0.###")</td>
+                            <td data-label="单价" class="pf-money">¥@line.UnitPrice.ToString("N2")</td>
+                            <td data-label="小计" class="pf-money pf-line-subtotal">¥@line.Subtotal.ToString("N2")</td>
+                        </tr>
+                    }
+                    </tbody>
+                    <tfoot>
+                        <tr>
+                            <td colspan="4">采购明细汇总</td>
+                            <td><span class="pf-line-total">¥@Model.PurchaseRequest.Amount.ToString("N2")</span></td>
+                        </tr>
+                    </tfoot>
+                </table>
+            </div>
         }
     </section>
 
@@ -131,7 +171,7 @@
     </section>
 
     <section class="pf-panel mb-4" aria-labelledby="quotes-title">
-        <div class="pf-panel-heading"><div><span class="pf-section-kicker">QUOTATION COMPARISON</span><h2 id="quotes-title">报价比较 <small>@Model.PurchaseRequest.Quotes.Count 家供应商</small></h2></div><span class="pf-hint">最低价、最快交期和已选方案均已标记</span></div>
+        <div class="pf-panel-heading"><div><span class="pf-section-kicker">QUOTATION COMPARISON</span><h2 id="quotes-title">报价比较 <small>@Model.PurchaseRequest.Quotes.Count 家供应商</small></h2></div><span class="pf-hint">最低价、最快交期和已选方案均已标记；每个供应商行下方可核对逐项报价与明细合计</span></div>
         @if (Model.PurchaseRequest.Quotes.Count == 0)
         {
             <div class="pf-empty-state"><strong>还没有供应商报价</strong><span>录入至少两家报价，才能比较不同采购方案。</span></div>
@@ -176,6 +216,58 @@
                                 }
                             </td>
                         </tr>
+                        @* P0-1：每个供应商行下方展示该报价的逐项明细，并核对“报价合计 = 明细合计”。
+                           历史报价可能没有逐项明细（迁移前数据），这里显式提示，而不是假装一致。 *@
+                        var quoteLineSum = quote.Lines.Sum(x => x.Subtotal);
+                        var quoteTotalConsistent = quote.Lines.Count > 0 && Math.Abs(quoteLineSum - quote.Amount) < 0.005m;
+                        <tr class="pf-quote-detail-row">
+                            <td colspan="7">
+                                <details class="pf-quote-detail" open>
+                                    <summary>逐项报价明细<span class="pf-muted">（@quote.Lines.Count 项）</span></summary>
+                                    @if (quote.Lines.Count == 0)
+                                    {
+                                        <p class="pf-muted mb-0">该报价没有逐项明细（可能是迁移前的历史报价），无法核对“总额 = 明细合计”。</p>
+                                    }
+                                    else
+                                    {
+                                        <div class="table-responsive">
+                                            <table class="table pf-line-table pf-quote-detail-table align-middle mb-0">
+                                                <thead><tr><th>物料</th><th>规格</th><th>数量</th><th>报价单价</th><th>小计</th></tr></thead>
+                                                <tbody>
+                                                @foreach (var quoteLine in quote.Lines)
+                                                {
+                                                    <tr>
+                                                        <td data-label="物料"><strong>@quoteLine.ItemName</strong></td>
+                                                        <td data-label="规格" class="pf-muted">@(string.IsNullOrWhiteSpace(quoteLine.Specification) ? "—" : quoteLine.Specification)</td>
+                                                        <td data-label="数量">@quoteLine.Quantity.ToString("0.###")</td>
+                                                        <td data-label="报价单价" class="pf-money">¥@quoteLine.UnitPrice.ToString("N2")</td>
+                                                        <td data-label="小计" class="pf-money pf-line-subtotal">¥@quoteLine.Subtotal.ToString("N2")</td>
+                                                    </tr>
+                                                }
+                                                </tbody>
+                                                <tfoot>
+                                                    <tr>
+                                                        <td colspan="4">报价合计 / 明细合计</td>
+                                                        <td>
+                                                            <span class="pf-line-total">¥@quote.Amount.ToString("N2")</span>
+                                                            <span class="pf-muted">/ ¥@quoteLineSum.ToString("N2")</span>
+                                                            @if (quoteTotalConsistent)
+                                                            {
+                                                                <span class="pf-quote-consistency pf-quote-consistency-ok">✓ 一致</span>
+                                                            }
+                                                            else
+                                                            {
+                                                                <span class="pf-quote-consistency pf-quote-consistency-bad">⚠ 不一致（差 ¥@Math.Abs(quote.Amount - quoteLineSum).ToString("N2")）</span>
+                                                            }
+                                                        </td>
+                                                    </tr>
+                                                </tfoot>
+                                            </table>
+                                        </div>
+                                    }
+                                </details>
+                            </td>
+                        </tr>
                     }
                     </tbody>
                 </table>
@@ -183,15 +275,184 @@
         }
         @if (Model.CanEdit)
         {
-            <form method="post" asp-page-handler="AddQuote" asp-route-id="@Model.PurchaseRequest.Id" class="pf-add-quote-form row g-2 align-items-end mt-3">
-                <div class="col-md-3"><label class="form-label" for="supplierName">供应商</label><input class="form-control" id="supplierName" name="supplierName" placeholder="供应商名称" maxlength="100" required /></div>
-                <div class="col-md-2"><label class="form-label" for="amount">采购金额（元）</label><input class="form-control" id="amount" name="amount" type="number" min="0.01" step="0.01" required /></div>
-                <div class="col-md-2"><label class="form-label" for="deliveryDays">交付天数</label><input class="form-control" id="deliveryDays" name="deliveryDays" type="number" min="0" required /></div>
-                <div class="col-md-3"><label class="form-label" for="note">备注</label><input class="form-control" id="note" name="note" maxlength="500" placeholder="服务或条款差异" /></div>
-                <div class="col-md-2"><button class="btn btn-outline-primary w-100" type="submit">添加报价</button></div>
+            @* P0-1：报价从“手填总额”改为“按当前需求明细逐项录入报价单价”，
+               页面只提交需求明细 Id 与报价单价，报价总额由后端按明细小计汇总。 *@
+            <form method="post" asp-page-handler="AddQuote" asp-route-id="@Model.PurchaseRequest.Id" class="pf-add-quote-form mt-3" data-quote-editor>
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-3"><label class="form-label" for="supplierName">供应商</label><input class="form-control" id="supplierName" name="supplierName" placeholder="供应商名称" maxlength="100" required /></div>
+                    <div class="col-md-2"><label class="form-label" for="deliveryDays">交付天数</label><input class="form-control" id="deliveryDays" name="deliveryDays" type="number" min="0" required /></div>
+                    <div class="col-md-4"><label class="form-label" for="note">备注</label><input class="form-control" id="note" name="note" maxlength="500" placeholder="服务或条款差异" /></div>
+                    <div class="col-md-3"><button class="btn btn-outline-primary w-100" type="submit">添加报价</button></div>
+                </div>
+
+                @if (Model.PurchaseRequest.Lines.Count == 0)
+                {
+                    <p class="pf-progress-note mb-0 mt-3">还没有采购明细，无法按明细逐项报价。请先在下方“编辑采购需求”中补充明细。</p>
+                }
+                else
+                {
+                    <div class="table-responsive mt-3">
+                        <table class="table pf-line-table pf-quote-input-table align-middle mb-0">
+                            <thead><tr><th>物料</th><th>规格</th><th>数量</th><th>报价单价（元）</th><th>小计</th></tr></thead>
+                            <tbody>
+                            @for (var i = 0; i < Model.PurchaseRequest.Lines.Count; i++)
+                            {
+                                var line = Model.PurchaseRequest.Lines[i];
+                                // P0-1：表单校验失败回显时 QuoteLines 可能少于当前明细，按索引兜底避免越界。
+                                var quoteLine = i < Model.QuoteLines.Count ? Model.QuoteLines[i] : null;
+                                <tr data-quote-line data-quote-quantity="@line.Quantity.ToString(CultureInfo.InvariantCulture)">
+                                    <td data-label="物料">
+                                        <input type="hidden" name="QuoteLines[@i].RequestLineId" value="@line.Id" />
+                                        <strong>@line.ItemName</strong>
+                                    </td>
+                                    <td data-label="规格" class="pf-muted">@(string.IsNullOrWhiteSpace(line.Specification) ? "—" : line.Specification)</td>
+                                    <td data-label="数量">@line.Quantity.ToString("0.###")</td>
+                                    <td data-label="报价单价"><input class="form-control form-control-sm" data-quote-price name="QuoteLines[@i].UnitPrice" value="@(quoteLine is not null && quoteLine.UnitPrice > 0 ? quoteLine.UnitPrice.ToString("0.00", CultureInfo.InvariantCulture) : string.Empty)" type="number" min="0" step="0.01" placeholder="0.00" required aria-label="@line.ItemName 的报价单价" /></td>
+                                    <td data-label="小计"><span class="pf-line-subtotal" data-quote-subtotal>¥0.00</span></td>
+                                </tr>
+                            }
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <td colspan="3">报价合计（按明细自动汇总，不需要手填总额）</td>
+                                    <td colspan="2"><span class="pf-line-total" data-quote-total>¥0.00</span></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                    <p class="pf-hint mb-0 mt-2">每条需求明细都要填写本供应商的报价单价；报价合计按“数量 × 报价单价”逐项汇总，与后端落库总额同口径。</p>
+                }
             </form>
         }
     </section>
+
+    @if (Model.PurchaseRequest.PurchaseOrder is { } order)
+    {
+        <section class="pf-panel mb-4" aria-labelledby="order-title">
+            <div class="pf-panel-heading">
+                <div><span class="pf-section-kicker">PURCHASE ORDER</span><h2 id="order-title">采购订单 <small>@order.OrderNumber</small></h2></div>
+                <span class="pf-hint">审批通过后按已选报价自动生成，可直接发给供应商</span>
+            </div>
+            <div class="pf-metric-grid mb-3">
+                <div class="pf-metric"><span>供应商</span><strong style="font-size:18px">@order.SupplierName</strong><small>来自已选报价</small></div>
+                <div class="pf-metric"><span>订单金额</span><strong>¥@order.Amount.ToString("N2")</strong><small>以选中报价为准</small></div>
+                <div class="pf-metric"><span>交付</span><strong>@order.DeliveryDays 天</strong><small>供应商承诺交期</small></div>
+                <div class="pf-metric"><span>订单状态</span><strong style="font-size:18px">@(Model.PurchaseOrderReceipts is { } receiptSummary ? PurchaseFlow.Web.Pages.Purchasing.DetailsModel.ReceiptStatusText(receiptSummary) : PurchaseFlow.Web.Pages.Purchasing.DetailsModel.OrderStatusText(order.Status))</strong><small>生成于 @order.CreationTime.ToString("yyyy-MM-dd HH:mm")</small></div>
+            </div>
+            <div class="table-responsive">
+                <table class="table pf-table pf-line-table align-middle mb-0">
+                    <thead><tr><th>物料</th><th>规格</th><th>数量</th><th>单价</th><th>小计</th></tr></thead>
+                    <tbody>
+                    @foreach (var line in order.Lines)
+                    {
+                        <tr>
+                            <td data-label="物料"><strong>@line.ItemName</strong></td>
+                            <td data-label="规格" class="pf-muted">@(string.IsNullOrWhiteSpace(line.Specification) ? "—" : line.Specification)</td>
+                            <td data-label="数量">@line.Quantity.ToString("0.###")</td>
+                            <td data-label="单价" class="pf-money">¥@line.UnitPrice.ToString("N2")</td>
+                            <td data-label="小计" class="pf-money pf-line-subtotal">¥@line.Subtotal.ToString("N2")</td>
+                        </tr>
+                    }
+                    </tbody>
+                </table>
+            </div>
+
+            @if (Model.CanViewReceipts && Model.PurchaseOrderReceipts is { } receiptState)
+            {
+                var receiptStatusText = PurchaseFlow.Web.Pages.Purchasing.DetailsModel.ReceiptStatusText(receiptState);
+                <div class="pf-receipt-panel mt-4" aria-labelledby="receipt-title">
+                    <div class="pf-panel-heading">
+                        <div><span class="pf-section-kicker">GOODS RECEIPT</span><h3 id="receipt-title">分批收货</h3></div>
+                        <span class="pf-status pf-status-@(receiptState.IsFullyReceived ? "approved" : receiptState.IsPartiallyReceived ? "pending" : "draft")">@receiptStatusText</span>
+                    </div>
+                    <div class="pf-metric-grid mb-3">
+                        <div class="pf-metric"><span>订购总量</span><strong>@receiptState.Lines.Sum(x => x.OrderedQuantity).ToString("0.###")</strong><small>当前 PO 明细合计</small></div>
+                        <div class="pf-metric"><span>累计已收</span><strong>@receiptState.Lines.Sum(x => x.ReceivedQuantity).ToString("0.###")</strong><small>已提交收货单合计</small></div>
+                        <div class="pf-metric"><span>剩余待收</span><strong>@receiptState.Lines.Sum(x => x.RemainingQuantity).ToString("0.###")</strong><small>不能超过订单剩余量</small></div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table pf-table pf-line-table align-middle mb-0">
+                            <thead><tr><th>物料</th><th>订购</th><th>累计已收</th><th>剩余</th><th>本次收货</th></tr></thead>
+                            <tbody>
+                            @for (var i = 0; i < Model.ReceiptLines.Count; i++)
+                            {
+                                var input = Model.ReceiptLines[i];
+                                var receiptLine = receiptState.Lines.FirstOrDefault(x => x.PurchaseOrderLineId == input.PurchaseOrderLineId);
+                                if (receiptLine is null) { continue; }
+                                <tr>
+                                    <td data-label="物料"><strong>@receiptLine.ItemName</strong><span class="pf-row-subtitle">@(string.IsNullOrWhiteSpace(receiptLine.Specification) ? "无规格" : receiptLine.Specification)</span></td>
+                                    <td data-label="订购">@receiptLine.OrderedQuantity.ToString("0.###")</td>
+                                    <td data-label="累计已收">@receiptLine.ReceivedQuantity.ToString("0.###")</td>
+                                    <td data-label="剩余">@receiptLine.RemainingQuantity.ToString("0.###")</td>
+                                    <td data-label="本次收货">
+                                        <input type="hidden" name="ReceiptLines[@i].PurchaseOrderLineId" value="@input.PurchaseOrderLineId" />
+                                        @if (Model.CanRegisterReceipts && receiptLine.RemainingQuantity > 0)
+                                        {
+                                            <div class="d-flex gap-2 align-items-center">
+                                                <input class="form-check-input" type="checkbox" name="ReceiptLines[@i].Selected" value="true" @(input.Selected ? "checked" : null) aria-label="选择 @receiptLine.ItemName" />
+                                                <input class="form-control form-control-sm" name="ReceiptLines[@i].Quantity" value="@input.Quantity" type="number" min="0.001" max="@receiptLine.RemainingQuantity" step="0.001" aria-label="@receiptLine.ItemName 本次收货数量" />
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            <span class="pf-muted">—</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                            </tbody>
+                        </table>
+                    </div>
+
+                    @if (Model.CanRegisterReceipts && !receiptState.IsFullyReceived)
+                    {
+                        <form method="post" asp-page-handler="Receive" asp-route-id="@Model.PurchaseRequest.Id" class="row g-2 align-items-end mt-3">
+                            <div class="col-md-3"><label class="form-label" for="receiptDate">业务收货日期</label><input class="form-control" id="receiptDate" name="ReceiptDate" value="@Model.ReceiptDate.ToString("yyyy-MM-dd")" type="date" required /></div>
+                            <div class="col-md-3"><label class="form-label" for="receiptKey">请求幂等标识</label><input class="form-control" id="receiptKey" name="ReceiptIdempotencyKey" value="@Model.ReceiptIdempotencyKey" maxlength="128" required /></div>
+                            <div class="col-md-4"><label class="form-label" for="receiptNote">备注</label><input class="form-control" id="receiptNote" name="ReceiptNote" value="@Model.ReceiptNote" maxlength="500" /></div>
+                            <div class="col-md-2"><button class="btn btn-outline-primary w-100" type="submit">提交收货</button></div>
+                        </form>
+                    }
+                    else if (receiptState.IsFullyReceived)
+                    {
+                        <p class="pf-progress-note mb-0 mt-3">所有订单明细均已收齐，已提交收货记录不可编辑或删除。</p>
+                    }
+                    else
+                    {
+                        <p class="pf-progress-note mb-0 mt-3">当前账号只有收货查看权限，不能登记收货。</p>
+                    }
+
+                    <div class="mt-4">
+                        <h4 class="h6">收货记录</h4>
+                        @if (receiptState.Receipts.Count == 0)
+                        {
+                            <div class="pf-empty-state pf-empty-state-compact"><span>暂无已提交收货记录。</span></div>
+                        }
+                        else
+                        {
+                            <div class="pf-timeline">
+                            @foreach (var receipt in receiptState.Receipts)
+                            {
+                                <div class="pf-timeline-item mb-3">
+                                    <strong>@receipt.ReceiptDate.ToString("yyyy-MM-dd")</strong>
+                                    <span class="pf-muted">提交于 @receipt.CreationTime.ToLocalTime().ToString("yyyy-MM-dd HH:mm") · 操作人 @(receipt.CreatorId?.ToString() ?? "系统")</span>
+                                    @if (!string.IsNullOrWhiteSpace(receipt.Note)) { <p class="mb-1">@receipt.Note</p> }
+                                    <ul class="mb-0">
+                                    @foreach (var receiptLine in receipt.Lines)
+                                    {
+                                        <li>@receiptLine.ItemName：@receiptLine.Quantity.ToString("0.###")</li>
+                                    }
+                                    </ul>
+                                </div>
+                            }
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
+        </section>
+    }
 
     <section class="pf-panel pf-decision-lab mb-4" data-decision-lab aria-labelledby="decision-lab-title">
         <div class="pf-panel-heading"><div><span class="pf-section-kicker">DECISION LAB</span><h2 id="decision-lab-title">决策实验台</h2></div><span class="pf-hint">调整比较偏好，不会改变已选方案</span></div>
@@ -225,11 +486,18 @@
     {
         <details class="pf-panel pf-edit-details mb-4" open>
             <summary><span><span class="pf-section-kicker">REQUEST DETAILS</span><strong>编辑采购需求</strong></span><span class="pf-hint">仅草稿或已退回需求可以修改</span></summary>
-            <form method="post" asp-page-handler="Update" asp-route-id="@Model.PurchaseRequest.Id" class="row g-3 align-items-end pf-edit-form">
-                <div class="col-md-3"><label class="form-label" for="orderReference">销售单号</label><input class="form-control" id="orderReference" name="orderReference" value="@Model.PurchaseRequest.OrderReference" maxlength="64" required /></div>
-                <div class="col-md-5"><label class="form-label" for="description">需求说明</label><input class="form-control" id="description" name="description" value="@Model.PurchaseRequest.Description" maxlength="500" required /></div>
-                <div class="col-md-2"><label class="form-label" for="saleAmount">销售金额（元）</label><input class="form-control" id="saleAmount" name="saleAmount" type="number" min="0.01" step="0.01" value="@Model.PurchaseRequest.SaleAmount" required /></div>
-                <div class="col-md-2"><button class="btn btn-outline-secondary w-100" type="submit">保存修改</button></div>
+            <form method="post" asp-page-handler="Update" asp-route-id="@Model.PurchaseRequest.Id" class="pf-edit-form">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-3"><label class="form-label" for="orderReference">销售单号</label><input class="form-control" id="orderReference" name="OrderReference" value="@Model.OrderReference" maxlength="64" required /></div>
+                    <div class="col-md-5"><label class="form-label" for="description">需求说明</label><input class="form-control" id="description" name="Description" value="@Model.Description" maxlength="500" required /></div>
+                    <div class="col-md-2"><label class="form-label" for="saleAmount">销售金额（元）</label><input class="form-control" id="saleAmount" name="SaleAmount" value="@Model.SaleAmount" type="number" min="0.01" step="0.01" required /></div>
+                    <div class="col-md-2"><button class="btn btn-outline-secondary w-100" type="submit">保存修改</button></div>
+                </div>
+                @await Html.PartialAsync("_LineEditor", new LineEditorModel
+                {
+                    Prefix = "Lines",
+                    Rows = Model.Lines
+                })
             </form>
         </details>
     }

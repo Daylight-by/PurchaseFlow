@@ -9,6 +9,8 @@
     "Permission:Requests": "View purchase requests",
     "Permission:EditRequests": "Create and edit purchase requests",
     "Permission:ReviewRequests": "Approve or return purchase requests",
+    "Permission:ViewReceipts": "View purchase receipts",
+    "Permission:RegisterReceipts": "Register purchase receipts",
     "PurchaseFlow:NotEditable": "This purchase request cannot be edited in its current state.",
     "PurchaseFlow:InvalidStatus": "This action is not allowed in the current state.",
     "PurchaseFlow:NeedTwoQuotes": "Add at least two supplier quotes before submitting.",
@@ -17,7 +19,24 @@
     "PurchaseFlow:InvalidAmount": "Amounts must be positive and delivery days cannot be negative.",
     "PurchaseFlow:NeedReviewComment": "Explain why the request was returned.",
     "PurchaseFlow:DuplicateSupplier": "This supplier already has a quote on the request.",
-    "PurchaseFlow:DuplicateOrderReference": "This sales order reference already has a purchase request."
+    "PurchaseFlow:DuplicateOrderReference": "This sales order reference already has a purchase request.",
+    "PurchaseFlow:NeedPurchaseLines": "Add at least one purchase line before submitting.",
+    "PurchaseFlow:InvalidItemName": "Item name is required.",
+    "PurchaseFlow:InvalidQuantity": "Quantity must be greater than zero.",
+    "PurchaseFlow:InvalidUnitPrice": "Unit price cannot be negative.",
+    "PurchaseFlow:QuoteLineMismatch": "A supplier quote must quote every purchase line of this request item by item.",
+    "PurchaseFlow:DuplicateLineId": "The same line id appears more than once. Refresh the page and try again.",
+    "PurchaseFlow:LineNotInRequest": "A submitted purchase line does not belong to this request.",
+    "PurchaseFlow:InvalidReceiptDate": "Choose a valid receipt date.",
+    "PurchaseFlow:InvalidReceiptKey": "The receipt request key is required.",
+    "PurchaseFlow:InvalidReceiptLines": "Select at least one purchase-order line to receive.",
+    "PurchaseFlow:DuplicateReceiptLine": "A receipt cannot contain the same purchase-order line twice.",
+    "PurchaseFlow:ReceiptLineNotInOrder": "The receipt line does not belong to this purchase order.",
+    "PurchaseFlow:ReceiptExceedsRemaining": "The receipt quantity cannot exceed the remaining order quantity.",
+    "PurchaseFlow:ReceiptOrderNotReceivable": "This purchase order cannot receive more goods.",
+    "PurchaseFlow:ReceiptIdempotencyConflict": "The receipt request key is already used for different content.",
+    "PurchaseFlow:ReceiptConcurrencyConflict": "The order was updated by another receipt request. Refresh and try again.",
+    "PurchaseFlow:ReceiptQuantityPrecision": "Receipt quantities support at most three decimal places.",
+    "PurchaseFlow:ReceiptNotFound": "The receipt record was not found."
   }
 }
-

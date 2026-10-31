@@ -40,23 +40,29 @@ public class DemoRoleDataSeedContributor : IDataSeedContributor, ITransientDepen
         // own roles and users without inheriting these sample accounts.
         if (context.TenantId.HasValue) return;
 
-        await EnsureRoleAsync("buyer", PurchaseFlowPermissions.EditRequests);
-        await EnsureRoleAsync("reviewer", PurchaseFlowPermissions.ReviewRequests);
+        await EnsureRoleAsync("buyer", PurchaseFlowPermissions.EditRequests, canViewReceipts: true);
+        await EnsureRoleAsync("reviewer", PurchaseFlowPermissions.ReviewRequests, canViewReceipts: true);
+        await EnsureRoleAsync("receiver", PurchaseFlowPermissions.RegisterReceipts, canViewReceipts: true);
 
         // Demo accounts are created unconditionally with well-known demo
         // passwords, so a freshly deployed instance is directly usable for
         // evaluation (the credentials are shown on the login page).
         await EnsureUserAsync("demo.buyer", "buyer@example.invalid", "buyer", "Buyer@Demo123");
         await EnsureUserAsync("demo.reviewer", "reviewer@example.invalid", "reviewer", "Reviewer@Demo123");
+        await EnsureUserAsync("demo.receiver", "receiver@example.invalid", "receiver",
+            Environment.GetEnvironmentVariable("Demo__ReceiverPassword"));
     }
 
-    private async Task EnsureRoleAsync(string name, string actionPermission)
+    private async Task EnsureRoleAsync(string name, string actionPermission, bool canViewReceipts = false)
     {
         if (await _roleManager.FindByNameAsync(name) is null)
             EnsureSucceeded(await _roleManager.CreateAsync(new IdentityRole(_guidGenerator.Create(), name)));
 
         await _permissionManager.SetForRoleAsync(name, PurchaseFlowPermissions.Requests, true);
         await _permissionManager.SetForRoleAsync(name, actionPermission, true);
+        await _permissionManager.SetForRoleAsync(name, PurchaseFlowPermissions.ViewReceipts, canViewReceipts);
+        await _permissionManager.SetForRoleAsync(name, PurchaseFlowPermissions.RegisterReceipts,
+            string.Equals(actionPermission, PurchaseFlowPermissions.RegisterReceipts, StringComparison.Ordinal));
     }
 
     private async Task EnsureUserAsync(string userName, string email, string role, string? password)

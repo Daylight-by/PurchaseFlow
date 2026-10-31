@@ -26,8 +26,15 @@ public class PurchaseFlowDbContext :
     ITenantManagementDbContext
 {
     public DbSet<PurchaseRequest> PurchaseRequests { get; set; }
+    public DbSet<PurchaseRequestLine> PurchaseRequestLines { get; set; }
     public DbSet<SupplierQuote> SupplierQuotes { get; set; }
+    // P0-1：报价逐项明细成为独立表，与 SupplierQuote 级联删除。
+    public DbSet<SupplierQuoteLine> SupplierQuoteLines { get; set; }
     public DbSet<ReviewEvent> ReviewEvents { get; set; }
+    public DbSet<PurchaseOrder> PurchaseOrders { get; set; }
+    public DbSet<PurchaseOrderLine> PurchaseOrderLines { get; set; }
+    public DbSet<GoodsReceipt> GoodsReceipts { get; set; }
+    public DbSet<GoodsReceiptLine> GoodsReceiptLines { get; set; }
 
     #region Entities from the modules
 
@@ -86,6 +93,8 @@ public class PurchaseFlowDbContext :
             b.Property(x => x.Description).IsRequired().HasMaxLength(500);
             b.Property(x => x.SaleAmount).HasPrecision(18, 2);
             b.Property(x => x.SelectionReason).HasMaxLength(500);
+            // The purchase amount is derived from the lines, it is never stored.
+            b.Ignore(x => x.Amount);
             b.HasIndex(x => new { x.TenantId, x.OrderReference }).IsUnique();
             // SQLite allows multiple NULLs in a unique composite index. Host
             // requests have a NULL TenantId, so they need a filtered index.
@@ -95,6 +104,23 @@ public class PurchaseFlowDbContext :
                 .HasFilter("\"TenantId\" IS NULL");
         });
 
+        builder.Entity<PurchaseRequestLine>(b =>
+        {
+            b.ToTable(PurchaseFlowConsts.DbTablePrefix + "PurchaseRequestLines", PurchaseFlowConsts.DbSchema);
+            b.ConfigureByConvention();
+            b.Property(x => x.ItemName).IsRequired().HasMaxLength(100);
+            b.Property(x => x.Specification).HasMaxLength(100);
+            b.Property(x => x.Quantity).HasPrecision(18, 3);
+            b.Property(x => x.UnitPrice).HasPrecision(18, 2);
+            // Subtotal is calculated from quantity and unit price.
+            b.Ignore(x => x.Subtotal);
+            b.HasOne<PurchaseRequest>()
+                .WithMany(x => x.Lines)
+                .HasForeignKey(x => x.PurchaseRequestId)
+                .OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(x => new { x.TenantId, x.PurchaseRequestId });
+        });
+
         builder.Entity<SupplierQuote>(b =>
         {
             b.ToTable(PurchaseFlowConsts.DbTablePrefix + "SupplierQuotes", PurchaseFlowConsts.DbSchema);
@@ -102,8 +128,30 @@ public class PurchaseFlowDbContext :
             b.Property(x => x.SupplierName).IsRequired().HasMaxLength(100);
             b.Property(x => x.Amount).HasPrecision(18, 2);
             b.Property(x => x.Note).HasMaxLength(500);
-            b.HasOne<PurchaseRequest>().WithMany().HasForeignKey(x => x.PurchaseRequestId).OnDelete(DeleteBehavior.Cascade);
+            b.HasOne<PurchaseRequest>()
+                .WithMany(x => x.Quotes)
+                .HasForeignKey(x => x.PurchaseRequestId)
+                .OnDelete(DeleteBehavior.Cascade);
             b.HasIndex(x => new { x.TenantId, x.PurchaseRequestId });
+        });
+
+        // P0-1：逐项报价明细。表结构与 PurchaseOrderLine 同构；Subtotal 由
+        // 数量 × 单价派生，不落库。PurchaseRequestLineId 只做溯源快照，
+        // 刻意不建外键：需求明细允许被整体替换/删除，历史报价必须保留。
+        builder.Entity<SupplierQuoteLine>(b =>
+        {
+            b.ToTable(PurchaseFlowConsts.DbTablePrefix + "SupplierQuoteLines", PurchaseFlowConsts.DbSchema);
+            b.ConfigureByConvention();
+            b.Property(x => x.ItemName).IsRequired().HasMaxLength(100);
+            b.Property(x => x.Specification).HasMaxLength(100);
+            b.Property(x => x.Quantity).HasPrecision(18, 3);
+            b.Property(x => x.UnitPrice).HasPrecision(18, 2);
+            b.Ignore(x => x.Subtotal);
+            b.HasOne<SupplierQuote>()
+                .WithMany(x => x.Lines)
+                .HasForeignKey(x => x.SupplierQuoteId)
+                .OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(x => new { x.TenantId, x.SupplierQuoteId });
         });
 
         builder.Entity<ReviewEvent>(b =>
@@ -114,6 +162,74 @@ public class PurchaseFlowDbContext :
             b.Property(x => x.Comment).HasMaxLength(500);
             b.HasOne<PurchaseRequest>().WithMany().HasForeignKey(x => x.PurchaseRequestId).OnDelete(DeleteBehavior.Cascade);
             b.HasIndex(x => new { x.TenantId, x.PurchaseRequestId, x.OccurredAtUtc });
+        });
+
+        builder.Entity<PurchaseOrder>(b =>
+        {
+            b.ToTable(PurchaseFlowConsts.DbTablePrefix + "PurchaseOrders", PurchaseFlowConsts.DbSchema);
+            b.ConfigureByConvention();
+            // P1-1："PO-" + OrderReference(64) 最长 67，原 64 上限会拒绝合法单号；
+            // 单号上限扩到 128，OrderReference 本身仍保持 64。
+            b.Property(x => x.OrderNumber).IsRequired().HasMaxLength(128);
+            b.Property(x => x.SupplierName).IsRequired().HasMaxLength(100);
+            b.Property(x => x.Amount).HasPrecision(18, 2);
+            b.Property(x => x.ReceiptVersion).HasDefaultValue(0).IsConcurrencyToken();
+            b.HasIndex(x => new { x.TenantId, x.OrderNumber }).IsUnique();
+            b.HasIndex(x => x.PurchaseRequestId).IsUnique();
+        });
+
+        builder.Entity<PurchaseOrderLine>(b =>
+        {
+            b.ToTable(PurchaseFlowConsts.DbTablePrefix + "PurchaseOrderLines", PurchaseFlowConsts.DbSchema);
+            b.ConfigureByConvention();
+            b.Property(x => x.ItemName).IsRequired().HasMaxLength(100);
+            b.Property(x => x.Specification).HasMaxLength(100);
+            b.Property(x => x.Quantity).HasPrecision(18, 3);
+            b.Property(x => x.ReceivedQuantity).HasPrecision(18, 3).HasDefaultValue(0m);
+            b.Property(x => x.UnitPrice).HasPrecision(18, 2);
+            b.Ignore(x => x.Subtotal);
+            b.HasOne<PurchaseOrder>()
+                .WithMany(x => x.Lines)
+                .HasForeignKey(x => x.PurchaseOrderId)
+                .OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(x => new { x.TenantId, x.PurchaseOrderId });
+        });
+
+        builder.Entity<GoodsReceipt>(b =>
+        {
+            b.ToTable(PurchaseFlowConsts.DbTablePrefix + "GoodsReceipts", PurchaseFlowConsts.DbSchema);
+            b.ConfigureByConvention();
+            b.Property(x => x.IdempotencyKey).IsRequired().HasMaxLength(128);
+            b.Property(x => x.RequestFingerprint).IsRequired().HasMaxLength(64);
+            b.Property(x => x.Note).HasMaxLength(500);
+            b.HasOne<PurchaseOrder>()
+                .WithMany()
+                .HasForeignKey(x => x.PurchaseOrderId)
+                .OnDelete(DeleteBehavior.Restrict);
+            b.HasIndex(x => new { x.TenantId, x.PurchaseOrderId, x.CreatorId, x.IdempotencyKey })
+                .IsUnique();
+            b.HasIndex(x => new { x.PurchaseOrderId, x.CreatorId, x.IdempotencyKey })
+                .HasDatabaseName("IX_AppGoodsReceipts_HostOrderCreatorIdempotency")
+                .IsUnique()
+                .HasFilter("\"TenantId\" IS NULL");
+            b.HasIndex(x => new { x.TenantId, x.PurchaseOrderId, x.CreationTime });
+        });
+
+        builder.Entity<GoodsReceiptLine>(b =>
+        {
+            b.ToTable(PurchaseFlowConsts.DbTablePrefix + "GoodsReceiptLines", PurchaseFlowConsts.DbSchema);
+            b.ConfigureByConvention();
+            b.Property(x => x.Quantity).HasPrecision(18, 3);
+            b.HasOne<GoodsReceipt>()
+                .WithMany(x => x.Lines)
+                .HasForeignKey(x => x.GoodsReceiptId)
+                .OnDelete(DeleteBehavior.Cascade);
+            b.HasOne<PurchaseOrderLine>()
+                .WithMany()
+                .HasForeignKey(x => x.PurchaseOrderLineId)
+                .OnDelete(DeleteBehavior.Restrict);
+            b.HasIndex(x => new { x.GoodsReceiptId, x.PurchaseOrderLineId }).IsUnique();
+            b.HasIndex(x => new { x.TenantId, x.PurchaseOrderLineId });
         });
     }
 }

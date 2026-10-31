@@ -1,0 +1,72 @@
+@model PurchaseFlow.Web.Models.LineEditorModel
+@using System.Globalization
+@{
+    var prefix = Model.Prefix;
+    var rows = Model.Rows;
+    var count = Math.Max(1, rows.Count);
+}
+
+<div class="pf-line-editor" data-line-editor data-line-prefix="@prefix">
+    <div class="table-responsive">
+        <table class="table pf-table pf-line-table align-middle">
+            <thead>
+                <tr>
+                    <th>物料</th>
+                    <th>规格</th>
+                    <th>数量</th>
+                    <th>单价（元）</th>
+                    <th>小计（元）</th>
+                    <th><span class="visually-hidden">操作</span></th>
+                </tr>
+            </thead>
+            <tbody data-line-rows>
+            @for (var index = 0; index < count; index++)
+            {
+                var row = index < rows.Count ? rows[index] : new LineInput();
+                var quantity = row.Quantity > 0 ? row.Quantity.ToString("0.###", CultureInfo.InvariantCulture) : string.Empty;
+                var unitPrice = row.UnitPrice > 0 ? row.UnitPrice.ToString("0.##", CultureInfo.InvariantCulture) : string.Empty;
+                <tr data-line-row>
+                    <td class="pf-line-name" data-label="物料">
+                        @* P1-3：已存在的明细行把 Id 随表单回传（新增行留空），
+                           应用层据此“有 Id 就地更新、无 Id 新增”，不再整批重建。 *@
+                        <input type="hidden" data-line-field="Id" name="@($"{prefix}[{index}].Id")" value="@(row.Id?.ToString())" />
+                        <input class="form-control form-control-sm" data-line-field="ItemName" data-line-item name="@($"{prefix}[{index}].ItemName")" value="@row.ItemName" maxlength="100" placeholder="物料名称" required />
+                    </td>
+                    <td class="pf-line-spec" data-label="规格"><input class="form-control form-control-sm" data-line-field="Specification" name="@($"{prefix}[{index}].Specification")" value="@row.Specification" maxlength="100" placeholder="规格型号" /></td>
+                    <td class="pf-line-number" data-label="数量"><input class="form-control form-control-sm" data-line-field="Quantity" data-line-quantity name="@($"{prefix}[{index}].Quantity")" value="@quantity" type="number" min="0.001" step="0.001" placeholder="0" required /></td>
+                    <td class="pf-line-price" data-label="单价"><input class="form-control form-control-sm" data-line-field="UnitPrice" data-line-price name="@($"{prefix}[{index}].UnitPrice")" value="@unitPrice" type="number" min="0" step="0.01" placeholder="0.00" required /></td>
+                    <td data-label="小计"><span class="pf-line-subtotal" data-line-subtotal>¥0.00</span></td>
+                    <td><button type="button" class="pf-line-remove" data-line-remove aria-label="删除该明细" title="删除该明细">✕</button></td>
+                </tr>
+            }
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="4">采购明细汇总</td>
+                    <td><span class="pf-line-total" data-line-total>¥0.00</span></td>
+                    <td></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+
+    <template data-line-template>
+        <tr data-line-row>
+            <td class="pf-line-name" data-label="物料">
+                @* P1-3：模板是“新增行”，Id 必须为空，由服务端生成新主键。 *@
+                <input type="hidden" data-line-field="Id" name="@($"{prefix}[0].Id")" value="" />
+                <input class="form-control form-control-sm" data-line-field="ItemName" data-line-item name="@($"{prefix}[0].ItemName")" maxlength="100" placeholder="物料名称" required />
+            </td>
+            <td class="pf-line-spec" data-label="规格"><input class="form-control form-control-sm" data-line-field="Specification" name="@($"{prefix}[0].Specification")" maxlength="100" placeholder="规格型号" /></td>
+            <td class="pf-line-number" data-label="数量"><input class="form-control form-control-sm" data-line-field="Quantity" data-line-quantity name="@($"{prefix}[0].Quantity")" type="number" min="0.001" step="0.001" placeholder="0" required /></td>
+            <td class="pf-line-price" data-label="单价"><input class="form-control form-control-sm" data-line-field="UnitPrice" data-line-price name="@($"{prefix}[0].UnitPrice")" type="number" min="0" step="0.01" placeholder="0.00" required /></td>
+            <td data-label="小计"><span class="pf-line-subtotal" data-line-subtotal>¥0.00</span></td>
+            <td><button type="button" class="pf-line-remove" data-line-remove aria-label="删除该明细" title="删除该明细">✕</button></td>
+        </tr>
+    </template>
+
+    <div class="pf-line-actions">
+        <button type="button" class="btn btn-outline-secondary btn-sm" data-line-add><i class="fas fa-plus" aria-hidden="true"></i> 添加明细</button>
+        <span class="pf-line-hint">金额由明细自动汇总，采购总额不需要手填。</span>
+    </div>
+</div>

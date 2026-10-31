@@ -38,8 +38,6 @@ public class PurchaseFlowEntityFrameworkCoreTestModule : AbpModule
             options.SaveStaticSettingsToDatabase = false;
             options.IsDynamicSettingStoreEnabled = false;
         });
-        context.Services.AddAlwaysDisableUnitOfWorkTransaction();
-
         ConfigureInMemorySqlite(context.Services);
     }
 

@@ -13,7 +13,9 @@ public static class QuoteDecisionAnalyzer
         decimal saleAmount,
         Guid? selectedId,
         string? reason,
-        IReadOnlyList<SupplierQuoteDto> quotes)
+        IReadOnlyList<SupplierQuoteDto> quotes,
+        int lineCount = 0,
+        decimal budgetAmount = 0m)
     {
         var items = quotes ?? Array.Empty<SupplierQuoteDto>();
         var result = new QuoteDecisionAnalysisDto
@@ -57,8 +59,15 @@ public static class QuoteDecisionAnalyzer
 
         var hasEnoughQuotes = items.Count >= 2;
         var hasReason = !string.IsNullOrWhiteSpace(reason);
+        var hasLines = lineCount > 0;
         result.Checks = new List<DecisionCheckDto>
         {
+            new()
+            {
+                Code = "NeedPurchaseLines",
+                Label = "至少一条采购明细",
+                IsComplete = hasLines
+            },
             new()
             {
                 Code = "NeedTwoQuotes",
@@ -78,7 +87,7 @@ public static class QuoteDecisionAnalyzer
                 IsComplete = hasReason
             }
         };
-        result.IsReadyToSubmit = hasEnoughQuotes && hasSelectedQuote && hasReason;
+        result.IsReadyToSubmit = hasLines && hasEnoughQuotes && hasSelectedQuote && hasReason;
 
         if (hasSelectedQuote && saleAmount - selected!.Amount < 0)
         {
@@ -98,7 +107,40 @@ public static class QuoteDecisionAnalyzer
             });
         }
 
+        // P1-4：预算基准缺失时不能静默跳过超预算检查。预算金额来自采购明细汇总，
+        // 为 0（或负数）意味着根本没有可比基准；若直接跳过，“无预算”看起来像
+        // “不超预算”，会误导审批人。这里给出明确的“无法判定”警告。
+        if (budgetAmount <= 0m)
+        {
+            result.Warnings.Add(new DecisionAlertDto
+            {
+                Code = "BudgetNotConfigured",
+                Message = "采购明细汇总为 0，未设置有效预算基准，无法进行超预算判定。"
+            });
+        }
+
+        if (budgetAmount > 0)
+        {
+            var overBudget = items.Count(x => x.Amount > budgetAmount);
+            if (overBudget > 0)
+            {
+                result.Warnings.Add(new DecisionAlertDto
+                {
+                    Code = "QuoteOverBudget",
+                    Message = $"有 {overBudget} 条报价高于采购明细汇总金额 ¥{budgetAmount:N2}（预算基准）。"
+                });
+            }
+
+            if (hasSelectedQuote && selected!.Amount > budgetAmount)
+            {
+                result.Warnings.Add(new DecisionAlertDto
+                {
+                    Code = "SelectedQuoteOverBudget",
+                    Message = $"所选报价高于采购明细汇总金额 ¥{budgetAmount:N2}（预算基准）。"
+                });
+            }
+        }
+
         return result;
     }
 }
-

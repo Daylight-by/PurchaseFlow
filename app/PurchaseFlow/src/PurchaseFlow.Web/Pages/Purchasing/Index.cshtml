@@ -32,13 +32,11 @@
     @if (Model.CanEdit)
     {
         <section class="pf-panel pf-create-panel mb-4" aria-labelledby="create-title" id="create-request">
-            <div class="pf-panel-heading"><div><span class="pf-section-kicker">NEW REQUEST</span><h2 id="create-title">创建采购需求</h2></div><span class="pf-hint">先建立需求，再补充供应商报价</span></div>
-            <form method="post" asp-page-handler="Create" class="row g-3 align-items-end">
-                <div class="col-md-3"><label class="form-label" for="orderReference">销售单号</label><input class="form-control" id="orderReference" name="orderReference" maxlength="64" placeholder="例如 SO-2026-001" required /></div>
-                <div class="col-md-5"><label class="form-label" for="description">需求说明</label><input class="form-control" id="description" name="description" maxlength="500" placeholder="简述本次采购内容" required /></div>
-                <div class="col-md-2"><label class="form-label" for="saleAmount">预计销售金额（元）</label><input class="form-control" id="saleAmount" name="saleAmount" type="number" min="0.01" step="0.01" placeholder="100000" required /></div>
-                <div class="col-md-2"><button class="btn pf-primary w-100" type="submit">创建需求 →</button></div>
-            </form>
+            <div class="pf-panel-heading"><div><span class="pf-section-kicker">NEW REQUEST</span><h2 id="create-title">创建采购需求</h2></div><span class="pf-hint">先写清明细，再补充供应商报价</span></div>
+            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                <p class="mb-0 pf-muted">新建时按物料、规格、数量和单价录入采购明细，需求金额由明细自动汇总。</p>
+                <a class="btn pf-primary" asp-page="/Purchasing/Create"><i class="fas fa-plus" aria-hidden="true"></i> 新建采购需求</a>
+            </div>
         </section>
     }
 
@@ -60,13 +58,14 @@
         </div>
         <div class="table-responsive">
             <table class="table pf-table mb-0">
-                <thead><tr><th>销售单号 / 需求</th><th>预计销售金额</th><th>状态</th><th>创建时间</th><th class="text-end">操作</th></tr></thead>
+                <thead><tr><th>销售单号 / 需求</th><th>预计销售金额</th><th>采购明细汇总</th><th>状态</th><th>创建时间</th><th class="text-end">操作</th></tr></thead>
                 <tbody>
                 @foreach (var item in Model.Result.Items)
                 {
                     <tr>
                         <td data-label="销售单号"><strong>@item.OrderReference</strong><span class="pf-row-subtitle">@item.Description</span></td>
                         <td data-label="预计销售金额" class="pf-money">¥@item.SaleAmount.ToString("N2")</td>
+                        <td data-label="采购明细汇总" class="pf-money">¥@item.Amount.ToString("N2")<span class="pf-row-subtitle">@item.LineCount 条明细</span></td>
                         <td data-label="状态"><span class="pf-status pf-status-@item.Status.ToString().ToLowerInvariant()">@PurchaseFlow.Web.Pages.Purchasing.IndexModel.StatusText(item.Status)</span></td>
                         <td data-label="创建时间" class="pf-muted">@item.CreationTime.ToString("yyyy-MM-dd HH:mm")</td>
                         <td data-label="操作" class="text-end"><a class="pf-link" asp-page="/Purchasing/Details" asp-route-id="@item.Id">查看决策 →</a></td>
@@ -74,7 +73,7 @@
                 }
                 @if (Model.Result.Items.Count == 0)
                 {
-                    <tr><td colspan="5" class="pf-empty">没有符合条件的采购需求。可以更换筛选条件，或创建第一条需求。</td></tr>
+                    <tr><td colspan="6" class="pf-empty">没有符合条件的采购需求。可以更换筛选条件，或创建第一条需求。</td></tr>
                 }
                 </tbody>
             </table>

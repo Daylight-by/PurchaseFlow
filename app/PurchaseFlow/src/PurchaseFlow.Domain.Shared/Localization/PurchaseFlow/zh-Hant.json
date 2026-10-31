@@ -1,10 +1,22 @@
 {
-    "culture": "zh-Hant",
-    "texts": {
-      "AppName": "PurchaseFlow",
-      "Menu:Home": "首頁",
-      "Welcome": "歡迎",
-      "LongWelcomeMessage": "歡迎來到此應用程式. 這是一個基於ABP框架的起始專案. 有關更多訊息, 請瀏覽 abp.io."
-    }
+  "culture": "zh-Hant",
+  "texts": {
+    "AppName": "PurchaseFlow",
+    "Menu:Home": "首頁",
+    "Welcome": "歡迎",
+    "LongWelcomeMessage": "歡迎來到此應用程式. 這是一個基於ABP框架的起始專案. 有關更多訊息, 請瀏覽 abp.io.",
+    "Permission:ViewReceipts": "查看採購收貨",
+    "Permission:RegisterReceipts": "登記採購收貨",
+    "PurchaseFlow:InvalidReceiptDate": "請選擇有效的收貨日期。",
+    "PurchaseFlow:InvalidReceiptKey": "收貨請求標識不能為空。",
+    "PurchaseFlow:InvalidReceiptLines": "請至少選擇一條收貨明細。",
+    "PurchaseFlow:DuplicateReceiptLine": "同一收貨單不能重複選擇同一訂單明細。",
+    "PurchaseFlow:ReceiptLineNotInOrder": "收貨明細不屬於目前採購訂單。",
+    "PurchaseFlow:ReceiptExceedsRemaining": "收貨數量不能超過訂單剩餘數量。",
+    "PurchaseFlow:ReceiptOrderNotReceivable": "目前採購訂單不允許繼續收貨。",
+    "PurchaseFlow:ReceiptIdempotencyConflict": "收貨請求標識已被其他內容使用。",
+    "PurchaseFlow:ReceiptConcurrencyConflict": "訂單正在被其他收貨請求更新，請重新整理後重試。",
+    "PurchaseFlow:ReceiptQuantityPrecision": "收貨數量最多支援三位小數。",
+    "PurchaseFlow:ReceiptNotFound": "收貨記錄不存在。"
   }
-
+}

@@ -12,6 +12,8 @@ public class PurchaseFlowPermissionDefinitionProvider : PermissionDefinitionProv
         var requests = myGroup.AddPermission(PurchaseFlowPermissions.Requests, L("Permission:Requests"));
         requests.AddChild(PurchaseFlowPermissions.EditRequests, L("Permission:EditRequests"));
         requests.AddChild(PurchaseFlowPermissions.ReviewRequests, L("Permission:ReviewRequests"));
+        myGroup.AddPermission(PurchaseFlowPermissions.ViewReceipts, L("Permission:ViewReceipts"));
+        myGroup.AddPermission(PurchaseFlowPermissions.RegisterReceipts, L("Permission:RegisterReceipts"));
     }
 
     private static LocalizableString L(string name)

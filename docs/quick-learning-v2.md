@@ -6,7 +6,7 @@
 
 当前仓库是一个可本地运行的教学业务切片：.NET 10、ABP 10.6.2、ASP.NET Core Razor Pages、EF Core、SQLite。主流程是“采购需求 → 供应商报价 → 选择依据 → 提交审核 → 退回或批准”。三类核心业务记录是 `PurchaseRequest`、`SupplierQuote`、`ReviewEvent`；Identity、权限、租户、审计等由 ABP 模块提供。
 
-源码能确认的示例规则包括：销售金额和报价金额大于零、交付天数不小于零；提交至少两条报价；选中报价必须属于当前需求并填写理由；草稿和已退回可编辑；待审核和已批准不可编辑；退回需要审核意见；批准后进入冻结状态；预计毛利等于销售金额减选中报价；同一需求内供应商名称不区分大小写地不能重复。这些都是教学切片规则，不是莫先生所在公司的制度。
+源码能确认的示例规则包括：销售金额大于零、每条报价单价不小于零、报价必须逐项覆盖当前需求全部明细（合计由服务端按明细汇总）、交付天数不小于零；提交至少两条报价；选中报价必须属于当前需求并填写理由；草稿和已退回可编辑；待审核和已批准不可编辑；退回需要审核意见；批准后进入冻结状态；预计毛利等于销售金额减选中报价；同一需求内供应商名称不区分大小写地不能重复。这些都是教学切片规则，不是莫先生所在公司的制度。
 
 新增的分析能力只服务于比较和提示：服务端 `QuoteDecisionAnalyzer.Analyze` 是无 I/O 的静态计算，给出三项提交检查、最低价/最快交期（支持并列）、预计毛利率、Pareto 价期均不占优和负毛利提示。提示不会阻止提交。详情页的“决策实验台”在浏览器端按价格/交期权重计算相对分数，调节权重不会改变已选报价，也不写数据库。独立 A4“决策简报”读取详情 DTO，打印动作是浏览器的 `window.print()`。运行时这些功能不生成 AI 内容；项目的页面、后端和测试曾借助 AI 生成并迭代，学习者正在按代码链路学习和验证，报价、理由和业务规则仍是示例数据与人工输入。
 
@@ -64,7 +64,7 @@ dotnet run --launch-profile PurchaseFlow.Web
 ### 10–25 分钟：用真实页面建立业务心智模型
 
 1. 在“采购需求”创建销售金额 100000 的需求。
-2. 增加 A：82000 元、10 天；B：86000 元、5 天；选择 B，填写“交付时间更短”。
+2. 录入需求明细（办公椅 10 把、会议桌 2 张），再按明细逐项录入 A 的报价单价（合计 82000 元、10 天）与 B 的报价单价（合计 86000 元、5 天）；选择 B，填写“交付时间更短”。
 3. 观察预计毛利 14000 元、比最低报价高 4000 元、交付提前 5 天；页面明确这是预计毛利，不是净利润。
 4. 在首页确认 Dashboard 的需求数、报价数、待审核队列和已批准金额只来自当前租户可见数据。
 
@@ -101,7 +101,7 @@ dotnet run --launch-profile PurchaseFlow.Web
 
 ### 第二天：持久化、ABP 基础设施和表达
 
-上午读 `PurchaseFlowDbContext.OnModelCreating`、EF Core 模块和两次迁移。确认三个业务 DbSet、列长度、金额精度、外键级联、租户索引和宿主 `TenantId IS NULL` 的部分唯一索引。理解 `AddDefaultRepositories(includeAllEntities: true)` 为什么让非聚合根报价和审核记录也有默认仓储。
+上午读 `PurchaseFlowDbContext.OnModelCreating`、EF Core 模块和 7 个迁移（InitialCreate、HostOrderReferenceUnique、AddPurchaseRequestLines、AddPurchaseOrders、AddGoodsReceipts、AddReceiptConcurrency、AddSupplierQuoteLines）。确认业务 DbSet（需求/明细、报价/报价明细、订单/明细、收货/明细、审核记录）、列长度、金额精度、外键级联、租户索引和宿主 `TenantId IS NULL` 的部分唯一索引。理解 `AddDefaultRepositories(includeAllEntities: true)` 为什么让非聚合根报价和审核记录也有默认仓储。
 
 中午专门核对租户与工作单元边界：实体实现 `IMultiTenant` 并保存 `TenantId`；Application 创建时写入 `CurrentTenant.Id`；ABP 数据过滤和当前租户上下文共同影响查询。Web 管线调用 `UseMultiTenancy`、`UseUnitOfWork`、`UseAuthorization`，但 EF Core 模块把 `TransactionBehavior` 设为 `Disabled`。所以“同一请求通常共享工作单元”不能表述成生产级事务保证，切换正式数据库时必须重新设计和验证事务、并发与重试。
 
@@ -132,7 +132,7 @@ dotnet run --launch-profile PurchaseFlow.Web
 | 打开采购需求 | `Pages/Purchasing/Index.cshtml.cs` `OnGetAsync` | `GetListAsync(PurchaseRequestListInput)` | 关键词、状态、分页；页面权限要求 `Requests`。 |
 | 创建需求 | `IndexModel.OnPostCreateAsync` | `CreateAsync` → `new PurchaseRequest` → `InsertAsync` | 初始 `Draft`；单号重复由 Application 查询和数据库索引共同防护。 |
 | 修改需求 | `DetailsModel.OnPostUpdateAsync` | `UpdateAsync` → `SetDetails` | 仅创建者且 `Draft/Returned` 可修改。 |
-| 添加报价 | `DetailsModel.OnPostAddQuoteAsync` | `AddQuoteAsync` → `SupplierQuote` 构造 → `InsertAsync` | 金额大于零、天数不小于零；同一需求供应商名忽略大小写不重复。 |
+| 添加报价 | `DetailsModel.OnPostAddQuoteAsync` | `AddQuoteAsync` → `SupplierQuote.AddLine` 逐项生成报价明细 → `InsertAsync` | 逐项报价单价不小于零且必须覆盖全部需求明细；合计由服务端按明细汇总；天数不小于零；同一需求供应商名忽略大小写不重复。 |
 | 删除报价 | `OnPostDeleteQuoteAsync` | `DeleteQuoteAsync` → `ClearSelectedQuote` → `DeleteAsync` | 仅可编辑状态；删除选中项会先清除选择。 |
 | 选择/更新理由 | `OnPostSelectAsync` | `SelectQuoteAsync` → `PurchaseRequest.SelectQuote` | Application 先确认报价属于需求，Domain 检查理由和可编辑状态。 |
 | 提交审核 | `OnPostSubmitAsync` | `SubmitAsync` → `request.Submit` → `AddEventAsync("Submitted")` | 至少两条报价、有效选择、非空理由；进入 `PendingReview`。 |
@@ -154,6 +154,7 @@ dotnet run --launch-profile PurchaseFlow.Web
 3. 生成三项检查：`NeedTwoQuotes`、`NeedSelectedQuote`、`NeedSelectionReason`。三项都完成才把 `IsReadyToSubmit` 设为 `true`。
 4. 若存在另一报价金额不更高、交期不更慢且至少一项更优，则候选报价属于 `DominatedQuoteIds`。并列完全相同不互相标记为被支配。
 5. 选中报价预计毛利为负，或选中报价价期均不占优，只加入警告；它们不会阻断提交，也不会替用户改选报价。
+6. 需求明细汇总（预算基准）不大于零时追加 `BudgetNotConfigured` 警告，明确无法进行超预算判定，而不是静默跳过。
 
 实验台的价格/交期相对评分在 `purchaseflow.js` 中计算。对报价集合分别取成本和交期的最小、最大值：
 
@@ -183,15 +184,16 @@ dotnet run --launch-profile PurchaseFlow.Web
 
 这些记录是本机演示数据，不代表真实订单或公司制度。
 
-## 8. 三张业务表
+## 8. 核心业务表
 
 | 逻辑表/实体 | 关键字段 | 关系与用途 |
 | --- | --- | --- |
 | `AppPurchaseRequests` / `PurchaseRequest` | `TenantId`、`BuyerUserId`、`OrderReference`、`Description`、`SaleAmount`、`Status`、`SelectedQuoteId`、`SelectionReason` | 采购需求主记录。`TenantId + OrderReference` 唯一；宿主 `TenantId IS NULL` 有单独部分唯一索引。 |
-| `AppSupplierQuotes` / `SupplierQuote` | `TenantId`、`PurchaseRequestId`、`SupplierName`、`Amount`、`DeliveryDays`、`Note` | 报价记录；通过 `PurchaseRequestId` 关联需求，外键级联删除。报价不是当前代码中的聚合内集合，而是独立 `Entity<Guid>`。 |
+| `AppSupplierQuotes` / `SupplierQuote` | `TenantId`、`PurchaseRequestId`、`SupplierName`、`Amount`、`DeliveryDays`、`Note` | 报价记录；`Amount` 由报价明细汇总并随明细变化重算（存储列，便于 Dashboard 只查报价表时取到金额）。通过 `PurchaseRequestId` 关联需求，外键级联删除。报价不是当前代码中的聚合内集合，而是独立 `Entity<Guid>`。 |
+| `AppSupplierQuoteLines` / `SupplierQuoteLine` | `TenantId`、`SupplierQuoteId`、`PurchaseRequestLineId`、`ItemName`、`Specification`、`Quantity`、`UnitPrice` | 报价明细：按需求明细逐项记录成交单价，小计 = 数量 × 单价（2 位四舍五入）；`PurchaseRequestLineId` 只作需求行快照来源，不建外键。报价合计必须等于明细合计。 |
 | `AppReviewEvents` / `ReviewEvent` | `TenantId`、`PurchaseRequestId`、`ActorUserId`、`Action`、`Comment`、`OccurredAtUtc` | 提交、退回、批准的可追溯事件；同样关联需求并级联删除，按发生时间索引。 |
 
-三张表之外还有 ABP Identity、权限、审计、租户、OpenIddict 等基础设施表；不要把教学切片的三张业务表说成完整采购系统的全部数据模型。
+核心业务表之外还有报价明细、采购订单、收货等表，以及 ABP Identity、权限、审计、租户、OpenIddict 等基础设施表；不要把教学切片的表说成完整采购系统的全部数据模型。
 
 ## 9. 权限、状态、租户和 UOW 边界
 
@@ -268,7 +270,7 @@ Web 管线使用 `UseUnitOfWork`，应用服务一次调用通常在同一个工
 ## 12. 复现与交付检查
 
 - 当前记录的浏览器验收覆盖 1440、1280、768、390、360 宽度；匿名首页/简报权限、实验台 0/100/reset 无网络写入、警示和 A4 简报均已通过。这是已记录场景的结果，不等于所有 UI 或业务场景全覆盖。
-- 当前完整 `dotnet test PurchaseFlow.slnx` 记录为 18 项通过：领域 3、应用 8、EF Core 6、Web 1。复现时仍应按本机环境重新执行并保留输出。
+- 当前完整 `dotnet test PurchaseFlow.slnx` 记录为 79 项通过：Domain 23、Application 11、EF Core 41、Web 4。复现时仍应按本机环境重新执行并保留输出。
 - 最终演示应使用现场真实可登录的角色权限；不要在文档、截图或消息中暴露私密凭据。
 - GitHub 仓库链接仍待补充；正式数据库、事务/并发方案和真实业务确认仍待交付。
 

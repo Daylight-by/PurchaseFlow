@@ -9,7 +9,9 @@
     "Permission:Requests": "查看采购需求",
     "Permission:EditRequests": "创建和编辑采购需求",
     "Permission:ReviewRequests": "批准或退回采购需求",
-    "PurchaseFlow:NotEditable": "当前状态不允许编辑采购需求。",
+    "Permission:ViewReceipts": "查看采购收货",
+    "Permission:RegisterReceipts": "登记采购收货",
+    "PurchaseFlow:NotEditable": "当前状态不允许编辑采购需求。", 
     "PurchaseFlow:InvalidStatus": "当前状态不允许执行此操作。",
     "PurchaseFlow:NeedTwoQuotes": "提交前至少录入两条供应商报价。",
     "PurchaseFlow:NeedSelectedQuote": "提交前请选择一条报价。",
@@ -17,7 +19,24 @@
     "PurchaseFlow:InvalidAmount": "金额必须大于零，交付天数不能小于零。",
     "PurchaseFlow:NeedReviewComment": "请填写退回原因。",
     "PurchaseFlow:DuplicateSupplier": "该供应商已有一条报价。",
-    "PurchaseFlow:DuplicateOrderReference": "该销售单号已有采购需求。"
+    "PurchaseFlow:DuplicateOrderReference": "该销售单号已有采购需求。",
+    "PurchaseFlow:NeedPurchaseLines": "提交前至少录入一条采购明细。",
+    "PurchaseFlow:InvalidItemName": "请填写物料名称。",
+    "PurchaseFlow:InvalidQuantity": "采购数量必须大于零。",
+    "PurchaseFlow:InvalidUnitPrice": "采购单价不能小于零。",
+    "PurchaseFlow:QuoteLineMismatch": "供应商报价必须逐项覆盖当前采购需求的全部明细。",
+    "PurchaseFlow:DuplicateLineId": "明细行标识重复，请刷新页面后重试。",
+    "PurchaseFlow:LineNotInRequest": "提交的明细行不属于当前采购需求。",
+    "PurchaseFlow:InvalidReceiptDate": "请选择有效的收货日期。",
+    "PurchaseFlow:InvalidReceiptKey": "收货请求标识不能为空。",
+    "PurchaseFlow:InvalidReceiptLines": "请至少选择一条收货明细。",
+    "PurchaseFlow:DuplicateReceiptLine": "同一收货单不能重复选择同一订单明细。",
+    "PurchaseFlow:ReceiptLineNotInOrder": "收货明细不属于当前采购订单。",
+    "PurchaseFlow:ReceiptExceedsRemaining": "收货数量不能超过订单剩余数量。",
+    "PurchaseFlow:ReceiptOrderNotReceivable": "当前采购订单不允许继续收货。",
+    "PurchaseFlow:ReceiptIdempotencyConflict": "收货请求标识已被其他内容使用。",
+    "PurchaseFlow:ReceiptConcurrencyConflict": "订单正在被其他收货请求更新，请刷新后重试。",
+    "PurchaseFlow:ReceiptQuantityPrecision": "收货数量最多支持三位小数。",
+    "PurchaseFlow:ReceiptNotFound": "收货记录不存在。"
   }
 }
-

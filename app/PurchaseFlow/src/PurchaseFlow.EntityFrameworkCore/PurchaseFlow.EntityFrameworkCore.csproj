@@ -23,6 +23,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- 迁移工具链需要 Microsoft.EntityFrameworkCore.Design：本解决方案的启动项目
+         （DbMigrator/Web）都没有引用它，dotnet ef 会报
+         "startup project doesn't reference Microsoft.EntityFrameworkCore.Design"。
+         这里加在迁移项目上并用 PrivateAssets=all 隔离，不改变任何运行时依赖。 -->
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.9">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.9">
       <PrivateAssets>all</PrivateAssets>
       <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>

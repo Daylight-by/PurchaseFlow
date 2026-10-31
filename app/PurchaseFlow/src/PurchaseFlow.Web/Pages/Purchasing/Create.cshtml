@@ -1,0 +1,66 @@
+@page
+@model PurchaseFlow.Web.Pages.Purchasing.CreateModel
+@{
+    Layout = "/Pages/Shared/_PurchaseLayout.cshtml";
+    ViewData["Title"] = "新建采购需求";
+}
+
+<div class="pf-page">
+    <nav class="pf-breadcrumb" aria-label="面包屑">
+        <a class="pf-link" asp-page="/Purchasing/Index">采购需求</a>
+        <span aria-hidden="true">/</span>
+        <span>新建需求</span>
+    </nav>
+
+    <header class="pf-page-heading">
+        <div>
+            <span class="pf-eyebrow">NEW REQUEST</span>
+            <h1>先写清楚要买什么。</h1>
+            <p>采购金额由明细自动汇总，销售金额用于毛利口径，两者分开记录。</p>
+        </div>
+        <a class="btn btn-outline-secondary" asp-page="/Purchasing/Index">返回列表</a>
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(Model.Error))
+    {
+        <div class="alert alert-danger" role="alert">@Model.Error</div>
+    }
+
+    <form method="post" class="pf-panel">
+        <div class="pf-panel-heading">
+            <div><span class="pf-section-kicker">REQUEST</span><h2>需求信息</h2></div>
+            <span class="pf-hint">创建后进入详情页继续录入供应商报价</span>
+        </div>
+
+        <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label" for="orderReference">销售单号</label>
+                <input class="form-control" id="orderReference" name="OrderReference" value="@Model.OrderReference" maxlength="64" placeholder="例如 SO-2026-001" required />
+            </div>
+            <div class="col-md-5">
+                <label class="form-label" for="description">需求说明</label>
+                <input class="form-control" id="description" name="Description" value="@Model.Description" maxlength="500" placeholder="简述本次采购内容" required />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label" for="saleAmount">预计销售金额（元）</label>
+                <input class="form-control" id="saleAmount" name="SaleAmount" value="@Model.SaleAmount" type="number" min="0.01" step="0.01" placeholder="100000" required />
+            </div>
+            <div class="col-md-2">
+                <button class="btn pf-primary w-100" type="submit">创建需求 →</button>
+            </div>
+        </div>
+
+        <hr class="my-4" />
+
+        <div class="pf-panel-heading">
+            <div><span class="pf-section-kicker">PURCHASE LINES</span><h2>采购明细</h2></div>
+            <span class="pf-hint">至少一条明细；提交审核前不能删除全部明细</span>
+        </div>
+
+        @await Html.PartialAsync("_LineEditor", new LineEditorModel
+        {
+            Prefix = "Lines",
+            Rows = Model.Lines
+        })
+    </form>
+</div>
