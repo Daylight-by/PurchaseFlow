@@ -37,7 +37,11 @@ public static class DemoPermissionGrants
                      PurchaseFlowPermissions.ViewReceipts,
                      PurchaseFlowPermissions.RegisterReceipts,
                      PurchaseFlowPermissions.MasterData,
-                     PurchaseFlowPermissions.ManageMasterData
+                     PurchaseFlowPermissions.ManageMasterData,
+                     // 第三轮：发票查看/登记、付款审批（管理员是唯一能批付款的演示角色）。
+                     PurchaseFlowPermissions.ViewInvoices,
+                     PurchaseFlowPermissions.RegisterInvoices,
+                     PurchaseFlowPermissions.ApprovePayments
                  })
         {
             await permissionManager.SetForRoleAsync(AdminRole, permission, true);
@@ -48,6 +52,10 @@ public static class DemoPermissionGrants
         await GrantBusinessRoleAsync(permissionManager, BuyerRole, PurchaseFlowPermissions.EditRequests);
         await GrantBusinessRoleAsync(permissionManager, ReviewerRole, PurchaseFlowPermissions.ReviewRequests);
         await GrantBusinessRoleAsync(permissionManager, ReceiverRole, PurchaseFlowPermissions.RegisterReceipts);
+
+        // 第三轮：采购员可以登记发票并申请付款；审核员/收货员只能查看。
+        // 付款审批权限只属于管理员（见上），形成“业务登记、管理审批”的职责分离。
+        await permissionManager.SetForRoleAsync(BuyerRole, PurchaseFlowPermissions.RegisterInvoices, true);
     }
 
     private static async Task GrantBusinessRoleAsync(
@@ -63,5 +71,7 @@ public static class DemoPermissionGrants
         // 业务角色都能“查看”供应商/物料档案（用于报价与需求明细选择），
         // 但不授予 ManageMasterData —— 维护权限只给管理员。
         await permissionManager.SetForRoleAsync(roleName, PurchaseFlowPermissions.MasterData, true);
+        // 第三轮：所有业务角色都能查看发票/付款进度，登记与审批权限按角色单独授予。
+        await permissionManager.SetForRoleAsync(roleName, PurchaseFlowPermissions.ViewInvoices, true);
     }
 }

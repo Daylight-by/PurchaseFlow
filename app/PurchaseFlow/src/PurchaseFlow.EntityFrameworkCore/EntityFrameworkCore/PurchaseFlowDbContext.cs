@@ -38,6 +38,10 @@ public class PurchaseFlowDbContext :
     public DbSet<PurchaseOrderLine> PurchaseOrderLines { get; set; }
     public DbSet<GoodsReceipt> GoodsReceipts { get; set; }
     public DbSet<GoodsReceiptLine> GoodsReceiptLines { get; set; }
+    // 第三轮（三单匹配 + 付款）：发票两张表 + 付款申请表。
+    public DbSet<SupplierInvoice> SupplierInvoices { get; set; }
+    public DbSet<SupplierInvoiceLine> SupplierInvoiceLines { get; set; }
+    public DbSet<PaymentApplication> PaymentApplications { get; set; }
 
     #region Entities from the modules
 
@@ -288,6 +292,65 @@ public class PurchaseFlowDbContext :
                 .OnDelete(DeleteBehavior.Restrict);
             b.HasIndex(x => new { x.GoodsReceiptId, x.PurchaseOrderLineId }).IsUnique();
             b.HasIndex(x => new { x.TenantId, x.PurchaseOrderLineId });
+        });
+
+        // 第三轮（三单匹配）：供应商发票。发票号在“同一订单”下唯一：
+        // (TenantId, PurchaseOrderId, InvoiceNumber) 唯一索引；SQLite 允许多个 NULL，
+        // 因此 host 发票（TenantId IS NULL）再建一个过滤唯一索引，沿用既有写法。
+        builder.Entity<SupplierInvoice>(b =>
+        {
+            b.ToTable(PurchaseFlowConsts.DbTablePrefix + "SupplierInvoices", PurchaseFlowConsts.DbSchema);
+            b.ConfigureByConvention();
+            b.Property(x => x.PurchaseOrderNumber).IsRequired().HasMaxLength(128);
+            b.Property(x => x.SupplierName).IsRequired().HasMaxLength(100);
+            b.Property(x => x.InvoiceNumber).IsRequired().HasMaxLength(64);
+            b.Property(x => x.Amount).HasPrecision(18, 2);
+            b.Property(x => x.Note).HasMaxLength(500);
+            b.HasIndex(x => new { x.TenantId, x.PurchaseOrderId, x.InvoiceNumber }).IsUnique();
+            b.HasIndex(x => new { x.PurchaseOrderId, x.InvoiceNumber })
+                .HasDatabaseName("IX_AppSupplierInvoices_HostOrderInvoiceNumber")
+                .IsUnique()
+                .HasFilter("\"TenantId\" IS NULL");
+            b.HasIndex(x => new { x.TenantId, x.PurchaseOrderId });
+        });
+
+        // 第三轮：发票明细。Subtotal 由数量 × 单价派生，不落库；随发票级联删除。
+        builder.Entity<SupplierInvoiceLine>(b =>
+        {
+            b.ToTable(PurchaseFlowConsts.DbTablePrefix + "SupplierInvoiceLines", PurchaseFlowConsts.DbSchema);
+            b.ConfigureByConvention();
+            b.Property(x => x.ItemName).IsRequired().HasMaxLength(100);
+            b.Property(x => x.Specification).HasMaxLength(100);
+            b.Property(x => x.Quantity).HasPrecision(18, 3);
+            b.Property(x => x.UnitPrice).HasPrecision(18, 2);
+            b.Ignore(x => x.Subtotal);
+            b.HasOne<SupplierInvoice>()
+                .WithMany(x => x.Lines)
+                .HasForeignKey(x => x.SupplierInvoiceId)
+                .OnDelete(DeleteBehavior.Cascade);
+            b.HasIndex(x => new { x.TenantId, x.SupplierInvoiceId });
+        });
+
+        // 第三轮：付款申请。一张发票只能有一笔付款申请（唯一索引兜底）；
+        // 外键指向发票并 Restrict —— 发票是付款依据，不允许删发票留下孤立付款单。
+        builder.Entity<PaymentApplication>(b =>
+        {
+            b.ToTable(PurchaseFlowConsts.DbTablePrefix + "PaymentApplications", PurchaseFlowConsts.DbSchema);
+            b.ConfigureByConvention();
+            b.Property(x => x.PurchaseOrderNumber).IsRequired().HasMaxLength(128);
+            b.Property(x => x.InvoiceNumber).IsRequired().HasMaxLength(64);
+            b.Property(x => x.Amount).HasPrecision(18, 2);
+            b.Property(x => x.Note).HasMaxLength(500);
+            b.HasOne<SupplierInvoice>()
+                .WithMany()
+                .HasForeignKey(x => x.SupplierInvoiceId)
+                .OnDelete(DeleteBehavior.Restrict);
+            b.HasIndex(x => new { x.TenantId, x.SupplierInvoiceId }).IsUnique();
+            b.HasIndex(x => x.SupplierInvoiceId)
+                .HasDatabaseName("IX_AppPaymentApplications_HostInvoice")
+                .IsUnique()
+                .HasFilter("\"TenantId\" IS NULL");
+            b.HasIndex(x => new { x.TenantId, x.Status });
         });
     }
 }

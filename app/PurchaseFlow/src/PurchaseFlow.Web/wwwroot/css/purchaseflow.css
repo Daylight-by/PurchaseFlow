@@ -58,3 +58,12 @@
 .pf-quote-validity-expired{background:#fbedeb;color:#b45747;font-weight:700}
 .pf-quote-expired-hint{display:block;font-size:9px;color:#b45747;font-weight:600;margin-bottom:5px}
 .pf-history-price{color:#5f7a4f}
+/* 第三轮（三单匹配+付款）：发票状态胶囊与操作表单布局。
+   状态色沿用既有语义：已匹配=蓝灰、已申请付款=琥珀、已付款=绿；操作表单紧凑排列避免撑破表格。 */
+.pf-status-invoice-matched{background:#eef4f9;color:#4e6b85}
+.pf-status-invoice-paymentrequested{background:#fff4df;color:#ae792d}
+.pf-status-invoice-paid{background:#e9f5ef;color:#388065}
+.pf-invoice-action-form{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.pf-invoice-action-form .form-control{max-width:150px}
+.pf-register-invoice-form .table th{font-size:10px;white-space:nowrap}
+.pf-register-invoice-form .table td{font-size:11px}

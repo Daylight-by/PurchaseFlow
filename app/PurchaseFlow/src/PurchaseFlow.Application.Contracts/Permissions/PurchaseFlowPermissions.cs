@@ -21,4 +21,10 @@ public static class PurchaseFlowPermissions
     // 演示里所有业务角色都能看档案用于选择，只有管理员能维护。
     public const string MasterData = GroupName + ".MasterData";
     public const string ManageMasterData = GroupName + ".MasterData.Manage";
+
+    // 第三轮（三单匹配 + 付款）：发票查看/登记、付款审批。
+    // 发票登记给采购员与管理员；付款审批只给管理员，形成“业务登记、管理审批”的职责分离。
+    public const string ViewInvoices = GroupName + ".Invoices.View";
+    public const string RegisterInvoices = GroupName + ".Invoices.Register";
+    public const string ApprovePayments = GroupName + ".Invoices.ApprovePayments";
 }

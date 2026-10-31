@@ -11,6 +11,7 @@
 - **主数据档案**：供应商档案与物料档案支持编码唯一、启用/停用，供应商含账期与评级、物料含规格与单位；报价与需求明细可优先从档案选择，单据仍保存名称/规格快照。查看权限与维护权限分离，演示中只有管理员可维护。
 - **报价决策**：比较各供应商报价合计（按需求明细逐项报价自动汇总）、交付天数和预计毛利；选中报价后显示相对最低价的成本差额与交付天数差额，并保留选择理由。
 - **报价有效期与历史采购价**：报价可填写有效期（UTC 业务日期、含当天；留空=长期有效），页面显示“长期有效/有效至 yyyy-MM-dd/已过期”，过期报价不能选择或提交，录入过去日期会被拒绝；报价录入行会展示该物料最近一次已生成订单的成交价参考（只读）。
+- **三单匹配与付款**：收货后按订单行登记供应商发票（单价必须等于订单成交单价、该行必须已收货、累计开票数量不超过已收货、同订单发票号唯一、发票金额=明细合计）；匹配后可在订单详情发起付款申请（一张发票一笔），管理员批准后方可登记付款，发票与付款申请同步为“已付款”；另提供“发票与付款”总览页。
 - **提交检查与提醒**：三项准备检查、预计毛利率、最低价/最快交期标签；负毛利与价期均不占优只作提醒，不擅自替用户改变选择。
 - **决策实验台**：调整价格与交期权重，在浏览器内比较临时排名；不发送请求、不保存权重、不更改已选方案。
 - **打印简报与使用指南**：独立 A4 决策简报包含全部报价、理由、金额与操作历史；系统内指南解释流程、角色和金额口径。
@@ -31,7 +32,7 @@
 | `app/PurchaseFlow/src/PurchaseFlow.Domain` | 采购需求、报价、审核记录与状态不变式 |
 | `app/PurchaseFlow/src/PurchaseFlow.Application.Contracts` | DTO、应用服务接口和权限定义 |
 | `app/PurchaseFlow/src/PurchaseFlow.Application` | 用例编排、归属检查、列表查询与报价比较 |
-| `app/PurchaseFlow/src/PurchaseFlow.EntityFrameworkCore` | SQLite 映射、唯一索引与 10 个迁移（InitialCreate、HostOrderReferenceUnique、AddPurchaseRequestLines、AddPurchaseOrders、AddGoodsReceipts、AddReceiptConcurrency、AddSupplierQuoteLines、AddMasterData、AddApprovalLevels、AddQuoteValidityAndPriceHistory） |
+| `app/PurchaseFlow/src/PurchaseFlow.EntityFrameworkCore` | SQLite 映射、唯一索引与 11 个迁移（InitialCreate、HostOrderReferenceUnique、AddPurchaseRequestLines、AddPurchaseOrders、AddGoodsReceipts、AddReceiptConcurrency、AddSupplierQuoteLines、AddMasterData、AddApprovalLevels、AddQuoteValidityAndPriceHistory、AddInvoicesAndPayments） |
 | `app/PurchaseFlow/src/PurchaseFlow.Web` | Razor 页面、表单和响应式界面 |
 | `app/PurchaseFlow/src/PurchaseFlow.DbMigrator` | 建库、管理员以及演示角色的初始化 |
 
@@ -60,7 +61,7 @@ $env:Demo__ReviewerPassword = Read-Host '审核员演示密码'
 dotnet run
 ```
 
-密码只通过本机环境变量提供，不写入仓库；不设置时只创建角色。ABP 模板本地管理员账号是 `admin` / `<local-template-password>`，仅供本机演示。采购员拥有查看、编辑权限，审核员负责一级审核，管理员另外拥有主数据维护与高金额二级审批权限（`ApproveHighValue`）；审核员不能代替采购员编辑需求。管理员的演示种子会显式授予全部采购业务权限（含 `Requests`），避免 ABP 权限不隐含父权限导致 403；审核员只有一级审批。已有的两个演示用户如果已创建，重新运行迁移器不会重置其密码。迁移器还会按编码幂等播种演示主数据：3 家供应商（SUP-001 华东办公家具/A/30 天、SUP-002 南方办公/B/15 天、SUP-003 北方机电/B/45 天）和 4 个物料（MAT-001 办公椅/人体工学/把、MAT-002 会议桌/2.4m/张、MAT-003 深沟球轴承/6205-2RS/个、MAT-004 骨架油封/NBR 20x3/个）。
+密码只通过本机环境变量提供，不写入仓库；不设置时只创建角色。ABP 模板本地管理员账号是 `admin` / `<local-template-password>`，仅供本机演示。采购员拥有查看、编辑权限，审核员负责一级审核，管理员另外拥有主数据维护与高金额二级审批权限（`ApproveHighValue`）；审核员不能代替采购员编辑需求。管理员的演示种子会显式授予全部采购业务权限（含 `Requests`），避免 ABP 权限不隐含父权限导致 403；审核员只有一级审批。发票查看/登记给采购员与管理员，付款审批与登记付款仅管理员，审核员/收货员只读。已有的两个演示用户如果已创建，重新运行迁移器不会重置其密码。迁移器还会按编码幂等播种演示主数据：3 家供应商（SUP-001 华东办公家具/A/30 天、SUP-002 南方办公/B/15 天、SUP-003 北方机电/B/45 天）和 4 个物料（MAT-001 办公椅/人体工学/把、MAT-002 会议桌/2.4m/张、MAT-003 深沟球轴承/6205-2RS/个、MAT-004 骨架油封/NBR 20x3/个）。
 
 ## 五分钟验收
 
@@ -71,8 +72,11 @@ dotnet run
 5. 用管理员打开“供应商档案/物料档案”，新建或编辑一条档案并尝试停用；换业务角色确认只能查看、不能维护。
 6. 新建一条报价合计 ≤ ¥50,000 的需求，审核员一级批准后直接变为已批准并生成订单（对照两级流程）。
 7. 完成第一单后，新建一条含同一物料明细的需求：报价录入区应显示“上次采购价”及来源订单号；再尝试把报价有效期填成昨天，确认保存被拒绝（`QuoteExpired`）。
+8. 用收货员为已批准订单登记收货（全部数量）；再用采购员在订单详情登记发票（发票号唯一、单价=订单成交单价、数量≤已收货未开票），确认发票状态“已匹配”，并在“发票与付款”总览能看到该发票。
+9. 对匹配发票发起付款申请（默认全额），管理员批准后登记付款；确认付款申请与发票都变为“已付款”。
+10. 尝试把发票单价改成与订单不一致、或开票数量超过已收货未开票数量，确认被拒绝（`InvoicePriceMismatch` / `InvoiceQuantityExceedsReceived`）。
 
-在 `app/PurchaseFlow` 目录执行 `dotnet test PurchaseFlow.slnx` 运行测试。构建 0 错误、0 警告，137 项测试通过（Domain 53、Application 11、EF Core 58、Web 15），包含 Dashboard 的 SQLite 汇总、队列排序、分级审批、报价有效期与历史采购价、租户隔离。浏览器另外检查了主要角色操作、创建者归属、退回重提、批准后冻结、表单错误、筛选分页、实验台无请求与选择不变，以及 1440/1280/768/390/360 宽度的六类页面。这些是已测场景，不代表生产级覆盖。
+在 `app/PurchaseFlow` 目录执行 `dotnet test PurchaseFlow.slnx` 运行测试。构建 0 错误、0 警告，153 项测试通过（Domain 58、Application 11、EF Core 65、Web 19），包含 Dashboard 的 SQLite 汇总、队列排序、分级审批、报价有效期与历史采购价、三单匹配与付款、租户隔离。浏览器另外检查了主要角色操作、创建者归属、退回重提、批准后冻结、表单错误、筛选分页、实验台无请求与选择不变，以及 1440/1280/768/390/360 宽度的六类页面。这些是已测场景，不代表生产级覆盖。
 
 业务约束见 [业务规则](docs/business-rules.md)。优先阅读 [V2 快速学习路线](docs/quick-learning-v2.md)，更长的基础安排见 [五天学习手册](docs/learning-path.md)。
 
@@ -82,5 +86,5 @@ dotnet run
 
 ## 边界与后续问题
 
-本项目没有接入真实 ERP 或正式审批制度；供应商/物料档案只是模拟主数据（不含供应商准入、资质与真实账期数据），分级审批的 ¥50,000 阈值与“二级只授予管理员”也是演示规则，报价有效期按 UTC 日期（含当天）判定、历史采购价仅作只读参考同样属于演示口径，真实金额分级制度、审批人范围、有效期制度与历史价使用范围需要业务确认；税费、运费、汇率、库存和并发编辑同样需要业务确认。SQLite 版沿用 ABP 模板的非事务性 Unit of Work 配置；正式数据库需重新验证事务与并发。公开部署前必须替换模板账户、客户端密钥、加密口令和证书，并在源码管理之外配置 `OpenIddict__CertificatePassword`。
+本项目没有接入真实 ERP 或正式审批制度；供应商/物料档案只是模拟主数据（不含供应商准入、资质与真实账期数据），分级审批的 ¥50,000 阈值与“二级只授予管理员”也是演示规则，报价有效期按 UTC 日期（含当天）判定、历史采购价仅作只读参考同样属于演示口径，发票/付款仅为演示三单匹配与审批流（真实发票验真、税额、银行付款指令与回单未接入），真实金额分级制度、审批人范围、有效期制度、历史价使用范围与财务会计制度需要业务确认；税费、运费、汇率、库存和并发编辑同样需要业务确认。SQLite 版沿用 ABP 模板的非事务性 Unit of Work 配置；正式数据库需重新验证事务与并发。公开部署前必须替换模板账户、客户端密钥、加密口令和证书，并在源码管理之外配置 `OpenIddict__CertificatePassword`。
 

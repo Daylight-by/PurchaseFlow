@@ -34,6 +34,21 @@ public static class PurchaseFlowErrors
 
     // 第二轮第 3 批（报价有效期）：过期报价不能选择/提交，避免用失效价格成交。
     public const string QuoteExpired = "PurchaseFlow:QuoteExpired";
+
+    // 第三轮（三单匹配 + 付款）：发票逐行匹配订单与收货，不匹配即拒绝。
+    public const string InvoiceLinesRequired = "PurchaseFlow:InvoiceLinesRequired";
+    public const string InvoiceNumberDuplicate = "PurchaseFlow:InvoiceNumberDuplicate";
+    public const string InvalidInvoiceDate = "PurchaseFlow:InvalidInvoiceDate";
+    public const string InvoiceLineNotInOrder = "PurchaseFlow:InvoiceLineNotInOrder";
+    public const string InvoicePriceMismatch = "PurchaseFlow:InvoicePriceMismatch";
+    public const string InvoiceQuantityExceedsReceived = "PurchaseFlow:InvoiceQuantityExceedsReceived";
+    public const string InvoiceNeedsReceivedGoods = "PurchaseFlow:InvoiceNeedsReceivedGoods";
+    public const string PaymentNotAllowedForInvoice = "PurchaseFlow:PaymentNotAllowedForInvoice";
+    public const string PaymentAmountExceedsInvoice = "PurchaseFlow:PaymentAmountExceedsInvoice";
+    public const string InvalidPaymentAmount = "PurchaseFlow:InvalidPaymentAmount";
+    public const string DuplicatePaymentForInvoice = "PurchaseFlow:DuplicatePaymentForInvoice";
+    public const string PaymentNotPending = "PurchaseFlow:PaymentNotPending";
+    public const string PaymentNotApproved = "PurchaseFlow:PaymentNotApproved";
     public const string InvalidReceiptDate = "PurchaseFlow:InvalidReceiptDate";
     public const string InvalidReceiptKey = "PurchaseFlow:InvalidReceiptKey";
     public const string InvalidReceiptLines = "PurchaseFlow:InvalidReceiptLines";

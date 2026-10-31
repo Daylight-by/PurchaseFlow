@@ -9,6 +9,8 @@
 3. 采购员选择一条报价并填写选择理由，然后提交审核。
 4. 审核人查看两条报价、选择理由和预计毛利，做一级批准或退回并填写意见；采购金额 ≤ ¥50,000 时一级批准即最终通过并生成订单，> ¥50,000 时进入二级待审，需另一位具备二级审批权限的人再批准后才生成订单。
 5. 已批准的需求冻结；退回的需求可修改后重新提交。每次提交、一级/二级批准和退回均写入业务操作记录。
+6. 收货完成后，采购员/管理员在订单详情按订单行登记供应商发票；系统执行“订单 ↔ 收货 ↔ 发票”三单匹配，不匹配直接拒绝。
+7. 对匹配发票发起付款申请（一张发票一笔），管理员批准后登记付款，付款申请与发票同步进入已付款；权限上采购员负责登记/申请、管理员负责审批/登记付款。
 
 预计毛利 = 销售金额 − 所选采购报价。数值只是演示用的预计值，不包含税费、履约成本等现实因素。
 
@@ -30,6 +32,11 @@
 - 提交和审核操作中的状态与业务记录由同一个 EF Core DbContext 在一个保存批次中写入。SQLite 演示版沿用 ABP 模板的非事务性 UoW 配置；若切换到正式数据库，需重新验证事务与并发行为。
 - 报价有效期：`SupplierQuote.ValidUntil` 为可选业务日期（UTC，含当天，`NULL`=长期有效）。新增报价不允许过去日期（`QuoteExpired`）；已过期报价不能被选择或提交（`QuoteExpired`）；有效期当天仍有效，从次日 00:00 UTC 起失效。
 - 历史采购价：采购订单明细通过可空 `MaterialId` 记录来源物料（订单生成时从所选报价对应的需求行继承），`IMaterialAppService.GetLastPurchasePriceAsync` 按物料返回最近一次已生成订单的成交单价、数量、订单号、供应商与下单时间；该参考只读，不参与金额、审批或毛利计算。
+- 发票登记（三单匹配）：发票必须挂在采购订单上，明细逐行属于该订单（`InvoiceLineNotInOrder`）；单价必须与订单成交单价完全一致（`InvoicePriceMismatch`）；该行必须已有收货（`InvoiceNeedsReceivedGoods`）；本次开票数量不得超过“累计已收货 − 累计已开票”（`InvoiceQuantityExceedsReceived`）；同一订单内发票号唯一（`InvoiceNumberDuplicate`）；同一条订单行在同一张发票内不能重复（`DuplicateLineId`）；发票金额必须等于明细合计。
+- 发票状态：`Matched` → `PaymentRequested`（申请付款）→ `Paid`（登记付款）单向流转，非法跳转报 `InvalidStatus`。
+- 付款申请：只有 `Matched` 发票可申请，且一张发票只能有一笔付款申请（`DuplicatePaymentForInvoice`）；金额默认全额，显式金额必须 >0 且不超过发票金额（`InvalidPaymentAmount` / `PaymentAmountExceedsInvoice`）；申请后发票置 `PaymentRequested`。
+- 付款审批与登记：仅 `PurchaseFlow.Invoices.ApprovePayments`（演示只授予 `admin`）可把 `PendingApproval` 批准为 `Approved` 并记录审批人/时间；仅 `Approved` 可登记付款（`PaymentNotApproved`）→ `Paid`，同时把发票置 `Paid`。发票状态与付款申请状态分开维护（AP 状态分离），登记付款时才同步到 `Paid`。
+- 发票/付款权限分离：`PurchaseFlow.Invoices.View` 查看（所有业务角色）、`Invoices.Register` 登记发票并申请付款（演示 `buyer`/`admin`）、`Invoices.ApprovePayments` 审批与登记付款（演示仅 `admin`）。
 
 ## 主数据：供应商档案与物料档案
 
@@ -45,7 +52,7 @@
 
 浏览器实验台按当前集合归一化金额和交期，默认 70/30 加权；全部相同的指标均为 100 分。它只改变临时排名，不发写请求、不保存权重、不替换服务端选择。当前项目运行时不调用 AI 决策。
 
-Dashboard 在当前租户范围内统计数据；已批准采购额和预计毛利只包含选中报价确实属于该需求的记录。简报取当前详情 DTO，打印后是当时的快照，不能替代电子签章或不可篡改归档。第四批新增报价有效期与历史采购价：`AppSupplierQuotes.ValidUntil`、`AppPurchaseOrderLines.MaterialId` 两列（均可空、不建外键，迁移 `AddQuoteValidityAndPriceHistory`）。第三批新增分级审批：`AppPurchaseRequests` 增加可空列 `FirstApproverUserId`（只记录一级审批人，不建外键，迁移 `AddApprovalLevels`）；状态枚举在末尾追加 `PendingSecondApproval = 4`，旧数据的状态值不变。第二批新增 `AppSuppliers`、`AppMaterials` 两张档案表，以及三列可空引用（`AppPurchaseRequestLines.MaterialId`、`AppSupplierQuotes.SupplierId`、`AppPurchaseOrders.SupplierId`），对应迁移为 `AddMasterData`；这些引用列不建数据库外键，历史单据优先。此前一批新增 `AppSupplierQuoteLines` 报价明细表，并把 `AppPurchaseOrders.OrderNumber` 上限从 64 扩到 128（迁移 `AddSupplierQuoteLines`）。
+Dashboard 在当前租户范围内统计数据；已批准采购额和预计毛利只包含选中报价确实属于该需求的记录。简报取当前详情 DTO，打印后是当时的快照，不能替代电子签章或不可篡改归档。第五批新增三单匹配与付款：`AppSupplierInvoices`、`AppSupplierInvoiceLines`、`AppPaymentApplications` 三张表（迁移 `AddInvoicesAndPayments`），含发票号按订单唯一、一张发票一笔付款的唯一索引与订单/供应商/发票号快照。第四批新增报价有效期与历史采购价：`AppSupplierQuotes.ValidUntil`、`AppPurchaseOrderLines.MaterialId` 两列（均可空、不建外键，迁移 `AddQuoteValidityAndPriceHistory`）。第三批新增分级审批：`AppPurchaseRequests` 增加可空列 `FirstApproverUserId`（只记录一级审批人，不建外键，迁移 `AddApprovalLevels`）；状态枚举在末尾追加 `PendingSecondApproval = 4`，旧数据的状态值不变。第二批新增 `AppSuppliers`、`AppMaterials` 两张档案表，以及三列可空引用（`AppPurchaseRequestLines.MaterialId`、`AppSupplierQuotes.SupplierId`、`AppPurchaseOrders.SupplierId`），对应迁移为 `AddMasterData`；这些引用列不建数据库外键，历史单据优先。此前一批新增 `AppSupplierQuoteLines` 报价明细表，并把 `AppPurchaseOrders.OrderNumber` 上限从 64 扩到 128（迁移 `AddSupplierQuoteLines`）。
 
 ## 示例金额
 
@@ -56,5 +63,7 @@ Dashboard 在当前租户范围内统计数据；已批准采购额和预计毛�
 演示主数据（DbMigrator 播种、按编码幂等）：供应商 SUP-001 华东办公家具（评级 A，账期 30 天）、SUP-002 南方办公（B，15 天）、SUP-003 北方机电（B，45 天）；物料 MAT-001 办公椅（人体工学，把）、MAT-002 会议桌（2.4m，张）、MAT-003 深沟球轴承（6205-2RS，个）、MAT-004 骨架油封（NBR 20x3，个）。这些档案用于演示“从档案选择”，不改变单据上的名称/规格快照口径。
 
 报价有效期与历史采购价演示：为 A 报价填写有效期=今天（页面显示“有效至 yyyy-MM-dd”）、B 留空（“长期有效”）；把有效期填成昨天再保存会被拒绝（`QuoteExpired`），已过期报价也不能被选择或提交。完成第一单后，新建含同一物料的需求，报价录入区显示“上次采购价”=上一订单成交单价及订单号（`GetLastPurchasePriceAsync`，只读参考，不参与金额计算）。
+
+三单匹配与付款演示（沿用上面的 86,000 元订单）：收货员先按订单行登记收货（办公椅 10 把、会议桌 2 张）；采购员登记发票 INV-2026-001（明细 10 × 5,200 + 2 × 17,000 = 86,000，单价与订单一致、数量不超过已收货）→ 状态“已匹配”；发起付款申请（默认全额 86,000）→ 管理员批准 → 管理员登记付款 → 付款申请与发票均“已付款”。若发票单价与订单不一致或开票数量超过“已收货 − 已开票”，登记会被拒绝。
 
 

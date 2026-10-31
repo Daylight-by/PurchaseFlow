@@ -1,0 +1,74 @@
+@page
+@model PurchaseFlow.Web.Pages.Finance.InvoicesModel
+@using PurchaseFlow.Purchasing
+@{
+    Layout = "/Pages/Shared/_PurchaseLayout.cshtml";
+    ViewData["Title"] = "发票与付款";
+}
+
+<div class="pf-page">
+    <header class="pf-page-heading">
+        <div>
+            <span class="pf-eyebrow">INVOICES &amp; PAYMENTS</span>
+            <h1>发票与付款，逐单核对。</h1>
+            <p>发票登记时必须与采购订单、收货单完成三单匹配；匹配成功后才能申请付款，付款需管理员批准后登记。写操作在对应的采购订单详情页完成。</p>
+        </div>
+    </header>
+
+    <section class="pf-panel mb-4" aria-label="发票筛选">
+        <div class="pf-panel-heading pf-list-heading">
+            <div><span class="pf-section-kicker">ACCOUNTING</span><h2>发票总览 <small>@Model.Result.TotalCount 条</small></h2></div>
+            <form method="get" class="d-flex gap-2 pf-search">
+                <input class="form-control" type="search" name="keyword" value="@Model.Filter.Keyword" placeholder="搜索发票号 / 订单号 / 供应商" aria-label="搜索发票" />
+                <select class="form-select" name="status" aria-label="按发票状态筛选">
+                    <option value="" selected="@(Model.Filter.Status is null)">全部状态</option>
+                    <option value="Matched" selected="@(Model.Filter.Status == SupplierInvoiceStatus.Matched)">已匹配</option>
+                    <option value="PaymentRequested" selected="@(Model.Filter.Status == SupplierInvoiceStatus.PaymentRequested)">已申请付款</option>
+                    <option value="Paid" selected="@(Model.Filter.Status == SupplierInvoiceStatus.Paid)">已付款</option>
+                </select>
+                <button class="btn btn-outline-secondary" type="submit">筛选</button>
+                @if (!string.IsNullOrWhiteSpace(Model.Filter.Keyword) || Model.Filter.Status.HasValue)
+                {
+                    <a class="btn btn-light" asp-page="/Finance/Invoices">清除</a>
+                }
+            </form>
+        </div>
+    </section>
+
+    <section class="pf-panel" aria-labelledby="invoice-list-title">
+        <div class="pf-panel-heading"><div><span class="pf-section-kicker">INVOICES</span><h2 id="invoice-list-title">发票列表 <small>@Model.Result.TotalCount 条</small></h2></div><span class="pf-hint">只读总览；登记、申请、批准与登记付款都在采购订单详情页</span></div>
+        <div class="table-responsive">
+            <table class="table pf-table mb-0">
+                <thead><tr><th>发票号</th><th>采购订单</th><th>供应商</th><th>发票日期</th><th>金额</th><th>匹配状态</th><th>付款状态</th></tr></thead>
+                <tbody>
+                @foreach (var invoice in Model.Result.Items)
+                {
+                    <tr>
+                        <td data-label="发票号"><strong>@invoice.InvoiceNumber</strong>@if (!string.IsNullOrWhiteSpace(invoice.Note)) { <span class="pf-row-subtitle">@invoice.Note</span> }</td>
+                        <td data-label="采购订单">@invoice.PurchaseOrderNumber</td>
+                        <td data-label="供应商">@invoice.SupplierName</td>
+                        <td data-label="发票日期" class="pf-muted">@invoice.InvoiceDate.ToString("yyyy-MM-dd")</td>
+                        <td data-label="金额" class="pf-money">¥@invoice.Amount.ToString("N2")</td>
+                        <td data-label="匹配状态"><span class="pf-status pf-status-invoice-@invoice.Status.ToString().ToLowerInvariant()">@PurchaseFlow.Web.Pages.Finance.InvoicesModel.InvoiceStatusText(invoice.Status)</span></td>
+                        <td data-label="付款状态" class="pf-muted">@PurchaseFlow.Web.Pages.Finance.InvoicesModel.PaymentStatusText(invoice.PaymentStatus)</td>
+                    </tr>
+                }
+                @if (Model.Result.Items.Count == 0)
+                {
+                    <tr><td colspan="7" class="pf-empty">还没有符合条件的发票。请先在采购订单详情页收货并登记发票。</td></tr>
+                }
+                </tbody>
+            </table>
+        </div>
+        @if (Model.TotalPages > 1)
+        {
+            <nav class="pf-pagination" aria-label="发票分页">
+                <span>第 @Model.Result.Page / @Model.TotalPages 页</span>
+                <div>
+                    @if (Model.Result.Page > 1) { <a asp-page="/Finance/Invoices" asp-route-keyword="@Model.Filter.Keyword" asp-route-status="@Model.Filter.Status" asp-route-pageNumber="@(Model.Result.Page - 1)">上一页</a> }
+                    @if (Model.Result.Page < Model.TotalPages) { <a asp-page="/Finance/Invoices" asp-route-keyword="@Model.Filter.Keyword" asp-route-status="@Model.Filter.Status" asp-route-pageNumber="@(Model.Result.Page + 1)">下一页</a> }
+                </div>
+            </nav>
+        }
+    </section>
+</div>

@@ -556,6 +556,156 @@
         </section>
     }
 
+    @* 第三轮（三单匹配 + 付款）：在订单/收货之后展示发票与付款闭环。
+       匹配校验全部在应用服务执行（单价 = 订单成交价、数量 ≤ 已收 − 已开票），
+       页面只负责展示可开票数量、收集输入并按权限显示“申请/批准/登记付款”按钮。 *@
+    @if (Model.PurchaseRequest.PurchaseOrder is { } invoiceOrder && Model.CanViewInvoices)
+    {
+        <section class="pf-panel pf-invoice-panel mb-4" aria-labelledby="invoice-title">
+            <div class="pf-panel-heading">
+                <div><span class="pf-section-kicker">THREE-WAY MATCH</span><h2 id="invoice-title">发票与付款 <small>@invoiceOrder.OrderNumber</small></h2></div>
+                <span class="pf-hint">发票单价必须等于订单成交单价，数量不超过“已收货 − 已开票”</span>
+            </div>
+
+            @if (Model.Invoices.Count == 0)
+            {
+                <div class="pf-empty-state pf-empty-state-compact"><strong>还没有登记发票</strong><span>收货后可按订单行登记发票参与三单匹配；匹配成功的发票才能申请付款。</span></div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table pf-table pf-line-table align-middle mb-0">
+                        <thead><tr><th>发票号</th><th>日期</th><th>金额</th><th>匹配状态</th><th>付款状态</th><th>操作</th></tr></thead>
+                        <tbody>
+                        @foreach (var invoice in Model.Invoices)
+                        {
+                            <tr>
+                                <td data-label="发票号"><strong>@invoice.InvoiceNumber</strong>@if (!string.IsNullOrWhiteSpace(invoice.Note)) { <span class="pf-row-subtitle">@invoice.Note</span> }</td>
+                                <td data-label="日期">@invoice.InvoiceDate.ToString("yyyy-MM-dd")</td>
+                                <td data-label="金额" class="pf-money">¥@invoice.Amount.ToString("N2")</td>
+                                <td data-label="匹配状态"><span class="pf-status pf-status-invoice-@invoice.Status.ToString().ToLowerInvariant()">@PurchaseFlow.Web.Pages.Purchasing.DetailsModel.InvoiceStatusText(invoice.Status)</span></td>
+                                <td data-label="付款状态" class="pf-muted">@PurchaseFlow.Web.Pages.Purchasing.DetailsModel.PaymentStatusText(invoice.PaymentStatus)</td>
+                                <td data-label="操作">
+                                    @if (invoice.Status == SupplierInvoiceStatus.Matched && invoice.PaymentId is null)
+                                    {
+                                        @* 只有匹配发票能申请付款；金额留空=按发票全额。 *@
+                                        @if (Model.CanRegisterInvoices)
+                                        {
+                                            <form method="post" asp-page-handler="RequestPayment" asp-route-id="@Model.PurchaseRequest.Id" class="pf-invoice-action-form">
+                                                <input type="hidden" name="invoiceId" value="@invoice.Id" />
+                                                <input class="form-control form-control-sm" name="amount" type="number" min="0.01" step="0.01" placeholder="留空=全额" aria-label="付款申请金额（留空=按发票全额）" />
+                                                <button class="btn btn-sm btn-outline-primary" type="submit">申请付款</button>
+                                            </form>
+                                        }
+                                        else
+                                        {
+                                            <span class="pf-muted">等待采购员申请付款</span>
+                                        }
+                                    }
+                                    else if (invoice.PaymentStatus == PaymentApplicationStatus.PendingApproval && invoice.PaymentId is { } pendingPaymentId)
+                                    {
+                                        @* 付款批准是管理员权限；非管理员只看到等待提示。 *@
+                                        @if (Model.CanApprovePayments)
+                                        {
+                                            <form method="post" asp-page-handler="ApprovePayment" asp-route-id="@Model.PurchaseRequest.Id" class="pf-invoice-action-form">
+                                                <input type="hidden" name="paymentId" value="@pendingPaymentId" />
+                                                <input class="form-control form-control-sm" name="comment" placeholder="批准意见（可选）" maxlength="500" aria-label="批准付款意见" />
+                                                <button class="btn btn-sm btn-success" type="submit">批准付款</button>
+                                            </form>
+                                        }
+                                        else
+                                        {
+                                            <span class="pf-muted">等待管理员批准付款</span>
+                                        }
+                                    }
+                                    else if (invoice.PaymentStatus == PaymentApplicationStatus.Approved && invoice.PaymentId is { } approvedPaymentId)
+                                    {
+                                        @* 只有批准后的付款申请才能登记付款；日期默认今天。 *@
+                                        @if (Model.CanApprovePayments)
+                                        {
+                                            <form method="post" asp-page-handler="RegisterPayment" asp-route-id="@Model.PurchaseRequest.Id" class="pf-invoice-action-form">
+                                                <input type="hidden" name="paymentId" value="@approvedPaymentId" />
+                                                <input class="form-control form-control-sm" name="paymentDate" type="date" value="@DateTime.Today.ToString("yyyy-MM-dd")" aria-label="付款日期" />
+                                                <button class="btn btn-sm btn-outline-primary" type="submit">登记付款</button>
+                                            </form>
+                                        }
+                                        else
+                                        {
+                                            <span class="pf-muted">等待管理员登记付款</span>
+                                        }
+                                    }
+                                    else if (invoice.Status == SupplierInvoiceStatus.Paid || invoice.PaymentStatus == PaymentApplicationStatus.Paid)
+                                    {
+                                        <span class="pf-status pf-status-approved">已付款</span>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                        </tbody>
+                    </table>
+                </div>
+            }
+
+            @if (Model.CanRegisterInvoices)
+            {
+                @if (Model.PurchaseOrderReceipts is null)
+                {
+                    <p class="pf-progress-note mb-0 mt-3">当前账号没有收货查看权限，无法核对“已收货”数量，暂不能登记发票。</p>
+                }
+                else if (Model.InvoiceableLines.Count == 0 || Model.InvoiceableLines.All(line => line.RemainingQuantity <= 0))
+                {
+                    <p class="pf-progress-note mb-0 mt-3">当前没有可开票数量：请先登记收货，且“已收货 − 已开票”必须大于 0。</p>
+                }
+                else
+                {
+                    <form method="post" asp-page-handler="RegisterInvoice" asp-route-id="@Model.PurchaseRequest.Id" class="pf-register-invoice-form mt-4">
+                        <h4 class="h6">登记发票（三单匹配）</h4>
+                        <div class="row g-2 align-items-end mb-3">
+                            <div class="col-md-3"><label class="form-label" for="invoiceNumber">发票号</label><input class="form-control" id="invoiceNumber" name="InvoiceNumber" value="@Model.InvoiceNumber" maxlength="64" required /></div>
+                            <div class="col-md-2"><label class="form-label" for="invoiceDate">发票日期</label><input class="form-control" id="invoiceDate" name="InvoiceDate" type="date" value="@Model.InvoiceDate.ToString("yyyy-MM-dd")" required /></div>
+                            <div class="col-md-4"><label class="form-label" for="invoiceNote">备注</label><input class="form-control" id="invoiceNote" name="InvoiceNote" value="@Model.InvoiceNote" maxlength="500" placeholder="发票说明（可选）" /></div>
+                            <div class="col-md-3"><button class="btn btn-outline-primary w-100" type="submit">登记发票</button></div>
+                        </div>
+                        <div class="table-responsive">
+                            <table class="table pf-line-table align-middle mb-0">
+                                <thead><tr><th>物料</th><th>订购</th><th>已收</th><th>已开票</th><th>剩余可开票</th><th>单价</th><th>本次开票数量</th></tr></thead>
+                                <tbody>
+                                @for (var i = 0; i < Model.InvoiceableLines.Count; i++)
+                                {
+                                    var line = Model.InvoiceableLines[i];
+                                    <tr>
+                                        <td data-label="物料"><strong>@line.ItemName</strong>@if (!string.IsNullOrWhiteSpace(line.Specification)) { <span class="pf-row-subtitle">@line.Specification</span> }</td>
+                                        <td data-label="订购">@line.OrderedQuantity.ToString("0.###")</td>
+                                        <td data-label="已收">@line.ReceivedQuantity.ToString("0.###")</td>
+                                        <td data-label="已开票">@line.InvoicedQuantity.ToString("0.###")</td>
+                                        <td data-label="剩余可开票">@line.RemainingQuantity.ToString("0.###")</td>
+                                        <td data-label="单价" class="pf-money">¥@line.UnitPrice.ToString("N2")</td>
+                                        <td data-label="本次开票数量">
+                                            @* 隐藏字段保证列表索引连续：单价只读提交，数量由用户输入（0 的行不参与匹配）。 *@
+                                            <input type="hidden" name="InvoiceLines[@i].PurchaseOrderLineId" value="@line.PurchaseOrderLineId" />
+                                            <input type="hidden" name="InvoiceLines[@i].UnitPrice" value="@line.UnitPrice.ToString(CultureInfo.InvariantCulture)" />
+                                            @if (line.RemainingQuantity > 0)
+                                            {
+                                                <input class="form-control form-control-sm" name="InvoiceLines[@i].Quantity" type="number" min="0" max="@line.RemainingQuantity.ToString(CultureInfo.InvariantCulture)" step="0.001" placeholder="0" value="@(i < Model.InvoiceLines.Count && Model.InvoiceLines[i].Quantity > 0 ? Model.InvoiceLines[i].Quantity.ToString("0.###", CultureInfo.InvariantCulture) : string.Empty)" aria-label="@line.ItemName 本次开票数量" />
+                                            }
+                                            else
+                                            {
+                                                <span class="pf-muted">已开完</span>
+                                                <input type="hidden" name="InvoiceLines[@i].Quantity" value="0" />
+                                            }
+                                        </td>
+                                    </tr>
+                                }
+                                </tbody>
+                            </table>
+                        </div>
+                        <p class="pf-hint mb-0 mt-2">单价由订单成交价只读带出，服务端会逐行核对；数量必须大于 0 且不超过剩余可开票量，未填写数量的行不会提交。</p>
+                    </form>
+                }
+            }
+        </section>
+    }
+
     <section class="pf-panel pf-decision-lab mb-4" data-decision-lab aria-labelledby="decision-lab-title">
         <div class="pf-panel-heading"><div><span class="pf-section-kicker">DECISION LAB</span><h2 id="decision-lab-title">决策实验台</h2></div><span class="pf-hint">调整比较偏好，不会改变已选方案</span></div>
         <p class="pf-lab-intro">拖动权重，观察价格和交期如何影响相对评分。分数只反映当前报价集合的相对位置，不能替代业务判断。</p>

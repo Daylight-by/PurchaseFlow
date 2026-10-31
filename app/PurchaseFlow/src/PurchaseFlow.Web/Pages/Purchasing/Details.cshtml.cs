@@ -24,6 +24,8 @@ public class DetailsModel : PurchaseFlowPageModel
     private readonly IGoodsReceiptAppService _receiptService;
     private readonly IMaterialAppService _materialService;
     private readonly ISupplierAppService _supplierService;
+    private readonly ISupplierInvoiceAppService _invoiceService;
+    private readonly IPaymentAppService _paymentService;
     private readonly IAuthorizationService _authorization;
     private readonly ICurrentUser _currentUser;
     private readonly IStringLocalizer<PurchaseFlowResource> _localizer;
@@ -45,6 +47,25 @@ public class DetailsModel : PurchaseFlowPageModel
 
     public bool CanViewReceipts { get; private set; }
     public bool CanRegisterReceipts { get; private set; }
+
+    /// <summary>
+    /// 第三轮（三单匹配）：发票/付款区块的权限。
+    /// 查看、登记发票、批准付款拆成三个开关，页面只显示当前用户有权执行的按钮；
+    /// 真正的状态与权限校验仍由应用服务 + [Authorize] 强制。
+    /// </summary>
+    public bool CanViewInvoices { get; private set; }
+    public bool CanRegisterInvoices { get; private set; }
+    public bool CanApprovePayments { get; private set; }
+
+    /// <summary>该采购订单已登记的发票列表（含付款申请状态），用于详情页内嵌展示。</summary>
+    public List<SupplierInvoiceDto> Invoices { get; private set; } = new();
+
+    /// <summary>
+    /// 登记发票表单的订单行快照（订购/已收/已开票/剩余可开票）。
+    /// 只有订单存在且能看到收货数据时才有值；服务端提交时仍会重新校验匹配规则。
+    /// </summary>
+    public List<InvoiceableLine> InvoiceableLines { get; private set; } = new();
+
     public string? Error { get; private set; }
 
     /// <summary>
@@ -96,8 +117,23 @@ public class DetailsModel : PurchaseFlowPageModel
     [BindProperty]
     public List<ReceiptLineInput> ReceiptLines { get; set; } = new();
 
+    // 第三轮：登记发票表单。发票号/日期/备注 + 每行“本次开票数量”；
+    // 单价由订单成交价只读带出并隐藏提交，服务端会核对，避免页面改价。
+    [BindProperty]
+    public string InvoiceNumber { get; set; } = string.Empty;
+
+    [BindProperty]
+    public DateTime InvoiceDate { get; set; } = DateTime.Today;
+
+    [BindProperty]
+    public string? InvoiceNote { get; set; }
+
+    [BindProperty]
+    public List<InvoiceLineInput> InvoiceLines { get; set; } = new();
+
     public DetailsModel(IPurchaseRequestAppService service, IGoodsReceiptAppService receiptService,
         IMaterialAppService materialService, ISupplierAppService supplierService,
+        ISupplierInvoiceAppService invoiceService, IPaymentAppService paymentService,
         IAuthorizationService authorization,
         ICurrentUser currentUser, IStringLocalizer<PurchaseFlowResource> localizer)
     {
@@ -105,6 +141,8 @@ public class DetailsModel : PurchaseFlowPageModel
         _receiptService = receiptService;
         _materialService = materialService;
         _supplierService = supplierService;
+        _invoiceService = invoiceService;
+        _paymentService = paymentService;
         _authorization = authorization;
         _currentUser = currentUser;
         _localizer = localizer;
@@ -269,6 +307,67 @@ public class DetailsModel : PurchaseFlowPageModel
     public Task<IActionResult> OnPostReturnAsync(Guid id, string? comment) =>
         RunAsync(id, () => _service.ReturnAsync(id, new ReviewPurchaseRequestDto { Comment = comment }));
 
+    /// <summary>
+    /// 第三轮：登记供应商发票（三单匹配）。页面提交“订单行 + 本次开票数量 + 单价（隐藏只读）”，
+    /// 单价/数量/收货匹配校验全部在应用服务内完成；页面只负责把输入原样传下去。
+    /// </summary>
+    public Task<IActionResult> OnPostRegisterInvoiceAsync(Guid id) => RunAsync(id, async () =>
+    {
+        var detail = await _service.GetAsync(id);
+        var order = detail.PurchaseOrder
+                    ?? throw new BusinessException(PurchaseFlowErrors.InvalidStatus);
+
+        var lines = (InvoiceLines ?? new List<InvoiceLineInput>())
+            .Where(line => line.PurchaseOrderLineId != Guid.Empty && line.Quantity > 0)
+            .Select(line => new CreateSupplierInvoiceLineDto
+            {
+                PurchaseOrderLineId = line.PurchaseOrderLineId,
+                Quantity = line.Quantity,
+                // 单价来自订单行只读隐藏字段；即使被篡改，应用服务也会用订单成交单价逐行拒绝。
+                UnitPrice = line.UnitPrice
+            }).ToList();
+
+        await _invoiceService.RegisterAsync(new CreateSupplierInvoiceDto
+        {
+            PurchaseOrderId = order.Id,
+            InvoiceNumber = InvoiceNumber ?? string.Empty,
+            InvoiceDate = InvoiceDate,
+            Note = InvoiceNote,
+            Lines = lines
+        });
+    });
+
+    /// <summary>
+    /// 第三轮：对“已匹配且未申请付款”的发票发起付款申请；金额留空表示按发票全额申请，
+    /// 服务端会校验金额范围与“同一发票只能一笔付款申请”。
+    /// </summary>
+    public Task<IActionResult> OnPostRequestPaymentAsync(Guid id, Guid invoiceId, decimal? amount, string? note) =>
+        RunAsync(id, () => _paymentService.RequestAsync(invoiceId, new CreatePaymentApplicationDto
+        {
+            Amount = amount,
+            Note = note
+        }));
+
+    /// <summary>
+    /// 第三轮：管理员批准付款申请（ApprovePayments 权限由应用服务与页面按钮双重控制）。
+    /// </summary>
+    public Task<IActionResult> OnPostApprovePaymentAsync(Guid id, Guid paymentId, string? comment) =>
+        RunAsync(id, () => _paymentService.ApproveAsync(paymentId, new ReviewPaymentApplicationDto
+        {
+            Comment = comment
+        }));
+
+    /// <summary>
+    /// 第三轮：管理员登记付款。未选择日期时默认今天；状态流转（Approved→Paid + 发票 Paid）
+    /// 由领域层强制，重复登记会被拒绝。
+    /// </summary>
+    public Task<IActionResult> OnPostRegisterPaymentAsync(Guid id, Guid paymentId, DateTime paymentDate, string? paymentNote) =>
+        RunAsync(id, () => _paymentService.RegisterPaymentAsync(paymentId, new RegisterPaymentDto
+        {
+            PaymentDate = paymentDate,
+            Note = paymentNote
+        }));
+
     public static string ActionText(string action) => action switch
     {
         "Submitted" => "提交审核",
@@ -293,6 +392,25 @@ public class DetailsModel : PurchaseFlowPageModel
         receipt.IsFullyReceived ? "已收货" :
         receipt.IsPartiallyReceived ? "部分收货" :
         OrderStatusText(receipt.OrderStatus);
+
+    /// <summary>第三轮：发票状态中文文案（Matched=已匹配 / PaymentRequested=已申请付款 / Paid=已付款）。</summary>
+    public static string InvoiceStatusText(SupplierInvoiceStatus status) => status switch
+    {
+        SupplierInvoiceStatus.Matched => "已匹配",
+        SupplierInvoiceStatus.PaymentRequested => "已申请付款",
+        SupplierInvoiceStatus.Paid => "已付款",
+        _ => status.ToString()
+    };
+
+    /// <summary>第三轮：付款申请状态中文文案；null 表示尚未申请付款。</summary>
+    public static string PaymentStatusText(PaymentApplicationStatus? status) => status switch
+    {
+        null => "未申请付款",
+        PaymentApplicationStatus.PendingApproval => "等待批准",
+        PaymentApplicationStatus.Approved => "已批准待付款",
+        PaymentApplicationStatus.Paid => "已付款",
+        _ => status.Value.ToString()
+    };
 
     /// <summary>
     /// 第二轮第 1 批：判断报价/订单关联的供应商档案是否仍在启用列表中。
@@ -393,6 +511,14 @@ public class DetailsModel : PurchaseFlowPageModel
         CanViewReceipts = (await _authorization.AuthorizeAsync(User, PurchaseFlowPermissions.ViewReceipts)).Succeeded;
         CanRegisterReceipts = CanViewReceipts &&
                               (await _authorization.AuthorizeAsync(User, PurchaseFlowPermissions.RegisterReceipts)).Succeeded;
+
+        // 第三轮（三单匹配）：发票/付款区块权限。查看与登记/批准分开，
+        // 页面只显示当前用户能执行的按钮；应用服务仍按权限与状态强制校验。
+        CanViewInvoices = (await _authorization.AuthorizeAsync(User, PurchaseFlowPermissions.ViewInvoices)).Succeeded;
+        CanRegisterInvoices = CanViewInvoices &&
+                              (await _authorization.AuthorizeAsync(User, PurchaseFlowPermissions.RegisterInvoices)).Succeeded;
+        CanApprovePayments = CanViewInvoices &&
+                             (await _authorization.AuthorizeAsync(User, PurchaseFlowPermissions.ApprovePayments)).Succeeded;
         PurchaseOrderReceipts = null;
 
         if (CanViewReceipts && PurchaseRequest.PurchaseOrder is { } order)
@@ -408,6 +534,53 @@ public class DetailsModel : PurchaseFlowPageModel
                 ReceiptDate = DateTime.Today;
                 ReceiptIdempotencyKey = Guid.NewGuid().ToString("N");
                 ReceiptNote = null;
+            }
+        }
+
+        // 第三轮：加载该采购订单的发票列表，并按“订购 / 已收 / 已开票 / 剩余可开票”组装登记表单快照。
+        // 只有订单存在且有发票查看权限时才查；登记发票还需要收货数据（已收数量），
+        // 因此没有收货查看权限时表单不展示可输入行。
+        Invoices = new List<SupplierInvoiceDto>();
+        InvoiceableLines = new List<InvoiceableLine>();
+        if (CanViewInvoices && PurchaseRequest.PurchaseOrder is { } purchaseOrder)
+        {
+            Invoices = await _invoiceService.GetOrderInvoicesAsync(purchaseOrder.Id);
+            var invoicedByLine = Invoices
+                .SelectMany(invoice => invoice.Lines)
+                .GroupBy(line => line.PurchaseOrderLineId)
+                .ToDictionary(group => group.Key, group => group.Sum(line => line.Quantity));
+
+            if (PurchaseOrderReceipts is not null)
+            {
+                InvoiceableLines = PurchaseOrderReceipts.Lines.Select(receiptLine =>
+                {
+                    invoicedByLine.TryGetValue(receiptLine.PurchaseOrderLineId, out var invoiced);
+                    var remaining = receiptLine.ReceivedQuantity - invoiced;
+                    if (remaining < 0) remaining = 0;
+                    return new InvoiceableLine
+                    {
+                        PurchaseOrderLineId = receiptLine.PurchaseOrderLineId,
+                        ItemName = receiptLine.ItemName,
+                        Specification = receiptLine.Specification,
+                        OrderedQuantity = receiptLine.OrderedQuantity,
+                        ReceivedQuantity = receiptLine.ReceivedQuantity,
+                        InvoicedQuantity = invoiced,
+                        RemainingQuantity = remaining,
+                        UnitPrice = purchaseOrder.Lines
+                            .FirstOrDefault(line => line.Id == receiptLine.PurchaseOrderLineId)?.UnitPrice ?? 0m
+                    };
+                }).ToList();
+
+                // 表单校验失败回到页面时保留用户已填数量；否则按订单行初始化默认空行。
+                if (InvoiceLines.Count == 0)
+                {
+                    InvoiceLines = InvoiceableLines.Select(line => new InvoiceLineInput
+                    {
+                        PurchaseOrderLineId = line.PurchaseOrderLineId,
+                        UnitPrice = line.UnitPrice
+                    }).ToList();
+                    InvoiceDate = DateTime.Today;
+                }
             }
         }
     }

@@ -12,10 +12,16 @@
     var isPurchasing = path.StartsWith("/Purchasing", StringComparison.OrdinalIgnoreCase);
     var isSuppliers = path.StartsWith("/MasterData/Suppliers", StringComparison.OrdinalIgnoreCase);
     var isMaterials = path.StartsWith("/MasterData/Materials", StringComparison.OrdinalIgnoreCase);
+    var isInvoices = path.StartsWith("/Finance/Invoices", StringComparison.OrdinalIgnoreCase);
     var isGuide = path.StartsWith("/Guide", StringComparison.OrdinalIgnoreCase);
     // 第二轮第 1 批：侧边导航也按 MasterData 权限显示档案入口。
     // 页面本身还有 [Authorize] 兜底，这里只是避免无权限用户看到点进去 403 的链接。
     var canViewMasterData = (await Authorization.AuthorizeAsync(User, PurchaseFlowPermissions.MasterData)).Succeeded;
+    // 第三轮：发票与付款入口按 ViewInvoices 权限显示（演示里所有业务角色都有查看权限）。
+    var canViewInvoices = (await Authorization.AuthorizeAsync(User, PurchaseFlowPermissions.ViewInvoices)).Succeeded;
+    // 使用指南前面的可见入口数量决定编号（01 概览 / 02 采购 / 03-04 主数据 / 发票顺延 / 使用指南再顺延）。
+    var invoiceIndex = 3 + (canViewMasterData ? 2 : 0);
+    var guideIndex = invoiceIndex + (canViewInvoices ? 1 : 0);
     var roleName = CurrentUser.IsInRole("admin") ? "管理员" : CurrentUser.IsInRole("reviewer") ? "审核员" : CurrentUser.IsInRole("buyer") ? "采购员" : "工作台用户";
 }
 <!DOCTYPE html>
@@ -44,7 +50,12 @@
                 <a href="/MasterData/Suppliers" class="@(isSuppliers ? "active" : "")" aria-current="@(isSuppliers ? "page" : null)"><i class="fas fa-truck" aria-hidden="true"></i>供应商档案<span>03</span></a>
                 <a href="/MasterData/Materials" class="@(isMaterials ? "active" : "")" aria-current="@(isMaterials ? "page" : null)"><i class="fas fa-boxes-stacked" aria-hidden="true"></i>物料档案<span>04</span></a>
             }
-            <a href="/Guide" class="@(isGuide ? "active" : "")" aria-current="@(isGuide ? "page" : null)"><i class="fas fa-compass" aria-hidden="true"></i>使用指南<span>@(canViewMasterData ? "05" : "03")</span></a>
+            @if (canViewInvoices)
+            {
+                @* 第三轮：发票与付款总览入口（只读），排在主数据之后、使用指南之前。 *@
+                <a href="/Finance/Invoices" class="@(isInvoices ? "active" : "")" aria-current="@(isInvoices ? "page" : null)"><i class="fas fa-file-invoice" aria-hidden="true"></i>发票与付款<span>@invoiceIndex.ToString("00")</span></a>
+            }
+            <a href="/Guide" class="@(isGuide ? "active" : "")" aria-current="@(isGuide ? "page" : null)"><i class="fas fa-compass" aria-hidden="true"></i>使用指南<span>@guideIndex.ToString("00")</span></a>
         </nav>
         @if (CurrentUser.IsInRole("admin"))
         {

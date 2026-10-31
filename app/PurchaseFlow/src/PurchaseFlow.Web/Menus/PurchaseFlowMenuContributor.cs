@@ -67,6 +67,19 @@ public class PurchaseFlowMenuContributor : IMenuContributor
             ));
         }
 
+        // 第三轮：发票与付款总览（只读）。查看权限 ViewInvoices 控制菜单可见性，
+        // 登记/审批按钮在订单详情页内按 RegisterInvoices / ApprovePayments 单独控制。
+        if (await context.IsGrantedAsync(PurchaseFlowPermissions.ViewInvoices))
+        {
+            context.Menu.AddItem(new ApplicationMenuItem(
+                PurchaseFlowMenus.Invoices,
+                "发票与付款",
+                "~/Finance/Invoices",
+                icon: "fas fa-file-invoice",
+                order: 4
+            ));
+        }
+
         if (MultiTenancyConsts.IsEnabled)
         {
             administration.SetSubItemOrder(TenantManagementMenuNames.GroupName, 1);

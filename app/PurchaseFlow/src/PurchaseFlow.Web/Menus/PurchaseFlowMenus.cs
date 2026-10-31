@@ -11,4 +11,7 @@ public class PurchaseFlowMenus
     public const string Suppliers = Prefix + ".Suppliers";
     public const string Materials = Prefix + ".Materials";
 
+    // 第三轮：发票与付款总览入口（查看权限 ViewInvoices）。
+    public const string Invoices = Prefix + ".Invoices";
+
 }
