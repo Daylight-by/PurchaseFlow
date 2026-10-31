@@ -89,6 +89,31 @@
       if(totalOutput) totalOutput.textContent = currency.format(Number(totalCents) / 100);
     };
 
+    // 第二轮第 1 批：物料档案选择。选中后把档案里的名称/规格填进文本框并设为只读，
+    // 同时把档案 Id 写入隐藏字段随表单提交；清空选择则恢复手工录入，兼容旧数据/旧流程。
+    const syncMaterial = (row) => {
+      const select = row.querySelector("[data-line-material]");
+      const hidden = row.querySelector('[data-line-field="MaterialId"]');
+      const nameInput = row.querySelector("[data-line-item]");
+      const specInput = row.querySelector("[data-line-spec]");
+      if(!select) return;
+      const apply = () => {
+        const option = select.selectedOptions[0];
+        const id = option ? option.value : "";
+        if(hidden) hidden.value = id;
+        if(id) {
+          if(nameInput) { nameInput.value = option.dataset.materialName ?? ""; nameInput.readOnly = true; }
+          if(specInput) { specInput.value = option.dataset.materialSpecification ?? ""; specInput.readOnly = true; }
+        } else {
+          // 不选档案时解锁文本，让用户可以像旧流程一样手工输入。
+          if(nameInput) nameInput.readOnly = false;
+          if(specInput) specInput.readOnly = false;
+        }
+        recalc();
+      };
+      select.addEventListener("change", apply);
+    };
+
     rows.addEventListener("input", recalc);
     rows.addEventListener("click", event => {
       const button = event.target.closest("[data-line-remove]");
@@ -97,7 +122,13 @@
       const row = button.closest("[data-line-row]");
       if(!row) return;
       const all = Array.from(rows.querySelectorAll("[data-line-row]"));
-      if(all.length === 1) { row.querySelectorAll("input").forEach(input => { input.value = ""; }); }
+      if(all.length === 1) {
+        // 只剩一行时不清行，而是清空输入；物料档案要同步回到“手工录入”，文本框解锁。
+        row.querySelectorAll("input").forEach(input => { input.value = ""; });
+        const select = row.querySelector("[data-line-material]");
+        if(select) select.value = "";
+        [row.querySelector("[data-line-item]"), row.querySelector("[data-line-spec]")].forEach(input => { if(input) input.readOnly = false; });
+      }
       else { row.remove(); }
       renumber();
       recalc();
@@ -105,10 +136,14 @@
     addButton?.addEventListener("click", () => {
       rows.append(template.content.cloneNode(true));
       renumber();
+      const added = rows.querySelector("[data-line-row]:last-child");
+      // 新行同样绑定物料档案选择（模板克隆出来的节点还没有监听器）。
+      if(added) syncMaterial(added);
       recalc();
-      rows.querySelector("[data-line-row]:last-child [data-line-item]")?.focus();
+      added?.querySelector("[data-line-item]")?.focus();
     });
     renumber();
+    rows.querySelectorAll("[data-line-row]").forEach(syncMaterial);
     recalc();
   });
 
@@ -135,5 +170,25 @@
     };
     editor.addEventListener("input", recalc);
     recalc();
+  });
+
+  // 第二轮第 1 批：报价表单的供应商档案选择。选中后把档案名称填入文本框、锁定文本，
+  // 并写入隐藏 SupplierId；清空选择则恢复手工名称输入，兼容未建档的旧供应商。
+  document.querySelectorAll("[data-supplier-select]").forEach(select => {
+    const form = select.closest("form");
+    const nameInput = form?.querySelector("[data-supplier-name-input]");
+    const hidden = form?.querySelector("[data-supplier-id]");
+    if(!nameInput) return;
+    select.addEventListener("change", () => {
+      const option = select.selectedOptions[0];
+      const id = option ? option.value : "";
+      if(hidden) hidden.value = id;
+      if(id) {
+        nameInput.value = option.dataset.supplierName ?? "";
+        nameInput.readOnly = true;
+      } else {
+        nameInput.readOnly = false;
+      }
+    });
   });
 })();

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using PurchaseFlow.Purchasing;
 
 namespace PurchaseFlow.Web.Models;
 
@@ -16,6 +17,13 @@ public class LineInput
     /// </summary>
     public Guid? Id { get; set; }
 
+    /// <summary>
+    /// 第二轮第 1 批：物料档案关联（可选）。为空表示沿用旧数据的手工录入；
+    /// 有值时服务端会用档案的物料名称/规格覆盖文本，作为单据快照保存，
+    /// 因此档案改名不会影响历史单据。
+    /// </summary>
+    public Guid? MaterialId { get; set; }
+
     public string ItemName { get; set; } = string.Empty;
     public string Specification { get; set; } = string.Empty;
     public decimal Quantity { get; set; }
@@ -29,6 +37,12 @@ public class LineEditorModel
 {
     public string Prefix { get; set; } = "Lines";
     public List<LineInput> Rows { get; set; } = new();
+
+    /// <summary>
+    /// 第二轮第 1 批：「物料档案」下拉选项。页面模型只传启用中的档案；
+    /// 明细行可以继续手工录入（空选项），因此旧数据/旧流程不受影响。
+    /// </summary>
+    public List<MaterialDto> Materials { get; set; } = new();
 }
 
 /// <summary>

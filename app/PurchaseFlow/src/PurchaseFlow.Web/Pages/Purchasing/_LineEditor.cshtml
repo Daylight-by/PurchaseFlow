@@ -1,5 +1,6 @@
 @model PurchaseFlow.Web.Models.LineEditorModel
 @using System.Globalization
+@using System.Linq
 @{
     var prefix = Model.Prefix;
     var rows = Model.Rows;
@@ -30,9 +31,24 @@
                         @* P1-3：已存在的明细行把 Id 随表单回传（新增行留空），
                            应用层据此“有 Id 就地更新、无 Id 新增”，不再整批重建。 *@
                         <input type="hidden" data-line-field="Id" name="@($"{prefix}[{index}].Id")" value="@(row.Id?.ToString())" />
-                        <input class="form-control form-control-sm" data-line-field="ItemName" data-line-item name="@($"{prefix}[{index}].ItemName")" value="@row.ItemName" maxlength="100" placeholder="物料名称" required />
+                        @* 第二轮第 1 批：可选的「物料档案」下拉。选中后用档案名称/规格覆盖下方文本并锁定；
+                           不选则保持旧数据的手工录入方式（空选项），旧流程完全兼容。 *@
+                        <select class="form-select form-select-sm pf-line-material" data-line-material aria-label="物料档案（可选）">
+                            <option value="">手工录入（旧数据）</option>
+                            @foreach (var material in Model.Materials)
+                            {
+                                <option value="@material.Id" data-material-name="@material.Name" data-material-specification="@material.Specification" selected="@(row.MaterialId == material.Id)">@material.Code · @material.Name</option>
+                            }
+                            @if (row.MaterialId is { } linkedMaterialId && !Model.Materials.Any(x => x.Id == linkedMaterialId))
+                            {
+                                @* 已关联但已停用的档案不在“启用物料”选项里：补一个提示项，避免下拉显示成空白误导用户。 *@
+                                <option value="@linkedMaterialId" selected>已停用档案（@linkedMaterialId.ToString("N")[..8]）</option>
+                            }
+                        </select>
+                        <input type="hidden" data-line-field="MaterialId" name="@($"{prefix}[{index}].MaterialId")" value="@(row.MaterialId?.ToString())" />
+                        <input class="form-control form-control-sm" data-line-field="ItemName" data-line-item name="@($"{prefix}[{index}].ItemName")" value="@row.ItemName" maxlength="100" placeholder="物料名称" required readonly="@row.MaterialId.HasValue" />
                     </td>
-                    <td class="pf-line-spec" data-label="规格"><input class="form-control form-control-sm" data-line-field="Specification" name="@($"{prefix}[{index}].Specification")" value="@row.Specification" maxlength="100" placeholder="规格型号" /></td>
+                    <td class="pf-line-spec" data-label="规格"><input class="form-control form-control-sm" data-line-field="Specification" data-line-spec name="@($"{prefix}[{index}].Specification")" value="@row.Specification" maxlength="100" placeholder="规格型号" readonly="@row.MaterialId.HasValue" /></td>
                     <td class="pf-line-number" data-label="数量"><input class="form-control form-control-sm" data-line-field="Quantity" data-line-quantity name="@($"{prefix}[{index}].Quantity")" value="@quantity" type="number" min="0.001" step="0.001" placeholder="0" required /></td>
                     <td class="pf-line-price" data-label="单价"><input class="form-control form-control-sm" data-line-field="UnitPrice" data-line-price name="@($"{prefix}[{index}].UnitPrice")" value="@unitPrice" type="number" min="0" step="0.01" placeholder="0.00" required /></td>
                     <td data-label="小计"><span class="pf-line-subtotal" data-line-subtotal>¥0.00</span></td>
@@ -55,9 +71,18 @@
             <td class="pf-line-name" data-label="物料">
                 @* P1-3：模板是“新增行”，Id 必须为空，由服务端生成新主键。 *@
                 <input type="hidden" data-line-field="Id" name="@($"{prefix}[0].Id")" value="" />
+                @* 第二轮第 1 批：新增行同样可以选择物料档案；模板里的下拉由 JS 在新增时接管。 *@
+                <select class="form-select form-select-sm pf-line-material" data-line-material aria-label="物料档案（可选）">
+                    <option value="">手工录入（旧数据）</option>
+                    @foreach (var material in Model.Materials)
+                    {
+                        <option value="@material.Id" data-material-name="@material.Name" data-material-specification="@material.Specification">@material.Code · @material.Name</option>
+                    }
+                </select>
+                <input type="hidden" data-line-field="MaterialId" name="@($"{prefix}[0].MaterialId")" value="" />
                 <input class="form-control form-control-sm" data-line-field="ItemName" data-line-item name="@($"{prefix}[0].ItemName")" maxlength="100" placeholder="物料名称" required />
             </td>
-            <td class="pf-line-spec" data-label="规格"><input class="form-control form-control-sm" data-line-field="Specification" name="@($"{prefix}[0].Specification")" maxlength="100" placeholder="规格型号" /></td>
+            <td class="pf-line-spec" data-label="规格"><input class="form-control form-control-sm" data-line-field="Specification" data-line-spec name="@($"{prefix}[0].Specification")" maxlength="100" placeholder="规格型号" /></td>
             <td class="pf-line-number" data-label="数量"><input class="form-control form-control-sm" data-line-field="Quantity" data-line-quantity name="@($"{prefix}[0].Quantity")" type="number" min="0.001" step="0.001" placeholder="0" required /></td>
             <td class="pf-line-price" data-label="单价"><input class="form-control form-control-sm" data-line-field="UnitPrice" data-line-price name="@($"{prefix}[0].UnitPrice")" type="number" min="0" step="0.01" placeholder="0.00" required /></td>
             <td data-label="小计"><span class="pf-line-subtotal" data-line-subtotal>¥0.00</span></td>
@@ -67,6 +92,6 @@
 
     <div class="pf-line-actions">
         <button type="button" class="btn btn-outline-secondary btn-sm" data-line-add><i class="fas fa-plus" aria-hidden="true"></i> 添加明细</button>
-        <span class="pf-line-hint">金额由明细自动汇总，采购总额不需要手填。</span>
+        <span class="pf-line-hint">金额由明细自动汇总，采购总额不需要手填；物料档案只用于规范录入，可改回手工输入。</span>
     </div>
 </div>

@@ -57,10 +57,12 @@
             <span class="pf-hint">至少一条明细；提交审核前不能删除全部明细</span>
         </div>
 
+        @* 第二轮第 1 批：把启用中的物料档案传入行编辑器，明细行可选择档案或继续手工录入。 *@
         @await Html.PartialAsync("_LineEditor", new LineEditorModel
         {
             Prefix = "Lines",
-            Rows = Model.Lines
+            Rows = Model.Lines,
+            Materials = Model.Materials
         })
     </form>
 </div>

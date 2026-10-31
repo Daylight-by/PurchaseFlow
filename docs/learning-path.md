@@ -69,7 +69,7 @@ Set-Location $repo\app\PurchaseFlow\src\PurchaseFlow.DbMigrator
 dotnet run
 ~~~
 
-它使用 DbMigratorHostedService 创建 ABP 应用、执行 PurchaseFlowDbMigrationService.MigrateAsync，应用已有迁移并执行种子数据，然后自行退出。业务迁移共 7 个：`20261023165331_InitialCreate`、`20261023182758_HostOrderReferenceUnique`（为没有 TenantId 的宿主数据补充销售单号唯一索引）、`20261030172250_AddPurchaseRequestLines`、`20261030173528_AddPurchaseOrders`、`20261030200240_AddGoodsReceipts`、`20261030201049_AddReceiptConcurrency`、`20261031101337_AddSupplierQuoteLines`。
+它使用 DbMigratorHostedService 创建 ABP 应用、执行 PurchaseFlowDbMigrationService.MigrateAsync，应用已有迁移并执行种子数据，然后自行退出。业务迁移共 8 个：`20261023165331_InitialCreate`、`20261023182758_HostOrderReferenceUnique`（为没有 TenantId 的宿主数据补充销售单号唯一索引）、`20261030172250_AddPurchaseRequestLines`、`20261030173528_AddPurchaseOrders`、`20261030200240_AddGoodsReceipts`、`20261030201049_AddReceiptConcurrency`、`20261031101337_AddSupplierQuoteLines`、`20261031121910_AddMasterData`。
 
 再开第二个窗口启动 Web：
 
@@ -81,11 +81,11 @@ dotnet run --launch-profile PurchaseFlow.Web
 
 浏览器打开 https://localhost:44345。端口来自 src/PurchaseFlow.Web/Properties/launchSettings.json 和 appsettings.json 的 App:SelfUrl。Web 与 DbMigrator 的连接字符串都是 Data Source=../../PurchaseFlow.db;，所以必须从各自项目目录启动；按上述目录启动时，数据库文件位于 app/PurchaseFlow/PurchaseFlow.db。不要同时运行两个 DbMigrator。
 
-ABP 模板管理员账号是 admin / <local-template-password>，仅用于本地演示。DemoRoleDataSeedContributor 自动创建 buyer 和 reviewer 角色并授予权限；只有在 `Demo:BuyerPassword`、`Demo:ReviewerPassword` 配置存在时才创建 `demo.buyer`、`demo.reviewer` 用户。可以在迁移器窗口用 `$env:Demo__BuyerPassword`、`$env:Demo__ReviewerPassword` 设置私有密码后重跑迁移器，详见 README。采购员需要 PurchaseFlow.Requests、PurchaseFlow.Requests.Edit；审核员需要 PurchaseFlow.Requests、PurchaseFlow.Requests.Review。审核权限本身不包含编辑权限。
+ABP 模板管理员账号是 admin / <local-template-password>，仅用于本地演示。DemoRoleDataSeedContributor 自动创建 buyer、reviewer、receiver 角色并授予权限（业务角色均可查看供应商/物料档案，管理员另有主数据维护权限）；只有在 `Demo:BuyerPassword`、`Demo:ReviewerPassword` 配置存在时才创建 `demo.buyer`、`demo.reviewer` 用户。可以在迁移器窗口用 `$env:Demo__BuyerPassword`、`$env:Demo__ReviewerPassword` 设置私有密码后重跑迁移器，详见 README。采购员需要 PurchaseFlow.Requests、PurchaseFlow.Requests.Edit；审核员需要 PurchaseFlow.Requests、PurchaseFlow.Requests.Review；主数据查看/维护分别是 PurchaseFlow.MasterData、PurchaseFlow.MasterData.Manage。审核权限本身不包含编辑权限。
 
 ### 最小验收
 
-登录后进入“采购需求”，创建销售金额 100000 的需求；按需求明细（办公椅 10 把、会议桌 2 张）逐项录入 A 的报价单价（合计 82000、10 天）、B 的报价单价（合计 86000、5 天）；选择 B，理由填写“交付时间更短”。页面应显示预计毛利 14000、成本差额 4000 和交付提前 5 天。提交、退回（原因必填）、重新提交并批准，详情页应出现四条对应的中文操作记录；代码中的动作值依次是 Submitted、Returned、Submitted、Approved。批准后编辑和提交按钮应消失。再建一条只含一条报价的需求，提交应显示“提交前至少录入两条供应商报价”。
+登录后进入“采购需求”，创建销售金额 100000 的需求；可在“供应商档案/物料档案”确认演示主数据，按需求明细（办公椅 10 把、会议桌 2 张）逐项录入 A 的报价单价（合计 82000、10 天）、B 的报价单价（合计 86000、5 天）；选择 B，理由填写“交付时间更短”。页面应显示预计毛利 14000、成本差额 4000 和交付提前 5 天。提交、退回（原因必填）、重新提交并批准，详情页应出现四条对应的中文操作记录；代码中的动作值依次是 Submitted、Returned、Submitted、Approved。批准后编辑和提交按钮应消失。再建一条只含一条报价的需求，提交应显示“提交前至少录入两条供应商报价”。
 
 ## 五天计划：每天有可验证的产物
 
@@ -119,9 +119,9 @@ dotnet test PurchaseFlow.slnx
 
 ### 第 3 天：理解 EF Core、迁移和 ABP 基础设施
 
-1. 读 EntityFrameworkCore/PurchaseFlowDbContext.cs：业务 DbSet 包括 PurchaseRequests、PurchaseRequestLines、SupplierQuotes、SupplierQuoteLines、ReviewEvents、PurchaseOrders、PurchaseOrderLines、GoodsReceipts、GoodsReceiptLines；OnModelCreating 配置表名、长度、金额精度、索引和级联删除。
+1. 读 EntityFrameworkCore/PurchaseFlowDbContext.cs：业务 DbSet 包括 PurchaseRequests、PurchaseRequestLines、SupplierQuotes、SupplierQuoteLines、ReviewEvents、PurchaseOrders、PurchaseOrderLines、GoodsReceipts、GoodsReceiptLines、Suppliers、Materials；OnModelCreating 配置表名、长度、金额精度、索引和级联删除。
 2. 读 PurchaseFlowEntityFrameworkCoreModule.cs：AddAbpDbContext 注册仓储，UseSqlite 选择 SQLite，includeAllEntities: true 让非聚合根也拥有默认仓储。
-3. 对照 Migrations 目录中的 7 个迁移（InitialCreate、HostOrderReferenceUnique、AddPurchaseRequestLines、AddPurchaseOrders、AddGoodsReceipts、AddReceiptConcurrency、AddSupplierQuoteLines）和 PurchaseFlowDbContextModelSnapshot.cs，确认迁移不是业务规则本身，而是数据库结构版本。
+3. 对照 Migrations 目录中的 8 个迁移（InitialCreate、HostOrderReferenceUnique、AddPurchaseRequestLines、AddPurchaseOrders、AddGoodsReceipts、AddReceiptConcurrency、AddSupplierQuoteLines、AddMasterData）和 PurchaseFlowDbContextModelSnapshot.cs，确认迁移不是业务规则本身，而是数据库结构版本。
 4. 读 IMultiTenant、TenantId 和 CurrentTenant.Id 的使用；ABP 的数据过滤会配合租户上下文，Application 创建实体时也显式写入当前租户。
 5. 读 AbpUnitOfWorkDefaultOptions：本 SQLite 模板将 TransactionBehavior 设为 Disabled。这意味着文档中的“同一保存批次”不能讲成生产级事务保证；切换正式数据库必须重新验证事务与并发。
 
@@ -217,13 +217,13 @@ PurchaseRequestListDto 已有 ReturnedCount，PurchaseRequestAppService.GetListA
 
 **0:40–1:30，创建需求。**登录本地管理员，打开采购询价，创建 SO-2026-001，销售金额 100000。说明页面的 Index.cshtml 由 IndexModel.OnPostCreateAsync 调用 CreateAsync，创建出的 PurchaseRequest 初始状态是 Draft，并记录 BuyerUserId。
 
-**1:30–2:30，比较报价。**在详情页按需求明细（办公椅 10 把、会议桌 2 张）逐项录入 A 的报价单价（合计 82000）/10 天和 B 的报价单价（合计 86000）/5 天，选择 B 并填写“交付时间更短”。指出页面展示的预计毛利是 100000 - 86000 = 14000；选 B 比最低价贵 4000，所以展示成本溢价。它是预计毛利，不含税费、运输和履约成本。
+**1:30–2:30，比较报价。**可先在“供应商档案/物料档案”展示演示主数据（报价可关联供应商档案、明细可关联物料档案），在详情页按需求明细（办公椅 10 把、会议桌 2 张）逐项录入 A 的报价单价（合计 82000）/10 天和 B 的报价单价（合计 86000）/5 天，选择 B 并填写“交付时间更短”。指出页面展示的预计毛利是 100000 - 86000 = 14000；选 B 比最低价贵 4000，所以展示成本溢价。它是预计毛利，不含税费、运输和履约成本。
 
 **2:30–3:25，提交和审核。**点击提交，状态变为 PendingReview，应用服务调用 PurchaseRequest.Submit，成功后插入 ReviewEvent(Submitted)。用审核账户打开详情，填写退回原因，状态变为 Returned；采购员改正后再提交，审核员批准，状态变为 Approved。指出操作记录来自 ReviewEvent，不是单纯的日志字符串。
 
 **3:25–4:20，演示后端约束。**尝试只放一条报价提交，页面显示本地化错误；尝试改已批准需求，按钮消失且后端仍会抛 NotEditable；用另一个采购员尝试修改，Application 的 GetOwnedRequestAsync 拒绝。强调页面权限是体验层，领域和应用服务才是安全边界。
 
-**4:20–5:00，讲架构。**“Razor Page handler 调 Application Contract；Application 负责当前用户、权限、跨实体查询和 DTO；Domain 负责状态不变式；Repository 由 EF Core DbContext 持久化到 SQLite；GET 再把 DTO 映射回页面。ABP 提供模块、DI、权限、租户、审计、Unit of Work 和约定式 API。”最后展示 PurchaseFlowDbContext.OnModelCreating 的索引和 7 个迁移，说明宿主数据需要额外唯一索引。
+**4:20–5:00，讲架构。**“Razor Page handler 调 Application Contract；Application 负责当前用户、权限、跨实体查询和 DTO；Domain 负责状态不变式；Repository 由 EF Core DbContext 持久化到 SQLite；GET 再把 DTO 映射回页面。ABP 提供模块、DI、权限、租户、审计、Unit of Work 和约定式 API。”最后展示 PurchaseFlowDbContext.OnModelCreating 的索引和 8 个迁移，说明宿主数据需要额外唯一索引。
 
 ## 面试官可能追问：诚实回答模板
 
@@ -242,9 +242,9 @@ PurchaseRequestListDto 已有 ReturnedCount，PurchaseRequestAppService.GetListA
 
 ## 明确边界：哪些是模拟规则，哪些仍未知
 
-当前可从源码确认的模拟规则包括：销售金额必须大于零，每条报价单价不小于零且报价必须逐项覆盖需求全部明细（合计由服务端汇总），交付天数不能小于零；提交至少两条报价；选中报价必须属于该需求并填写理由；待审核和已批准不可编辑；退回需要原因；批准后冻结；预计毛利等于销售金额减所选报价；同一需求不允许同名（忽略大小写）供应商报价；采购订单明细使用所选报价的成交单价、订单金额等于订单明细合计，订单单号 `PO-` 加销售单号不超过 128 字符。这些规则服务于教学演示，不能推断目标公司的正式政策。
+当前可从源码确认的模拟规则包括：销售金额必须大于零，每条报价单价不小于零且报价必须逐项覆盖需求全部明细（合计由服务端汇总），交付天数不能小于零；提交至少两条报价；选中报价必须属于该需求并填写理由；待审核和已批准不可编辑；退回需要原因；批准后冻结；预计毛利等于销售金额减所选报价；同一需求不允许同名（忽略大小写）供应商报价；采购订单明细使用所选报价的成交单价、订单金额等于订单明细合计，订单单号 `PO-` 加销售单号不超过 128 字符；供应商/物料档案编码在租户内唯一、可停用，停用后不能再被新单据引用，但单据上的名称/规格仍是快照。这些规则服务于教学演示，不能推断目标公司的正式政策。
 
-目前未知或未实现的内容包括：真实供应商主数据与资质、采购合同和付款、税费/运费/汇率、库存和交付验收、金额分级审批、通知、并发版本控制、正式数据库事务、生产密钥、数据保留与合规要求。源码中的 SQLite、模板管理员账号、开发证书、示例密码和 DemoRoleDataSeedContributor 都只适合本地演示；公开部署前必须替换凭据、证书、加密密钥，并重新评估事务、并发和权限。
+目前未知或未实现的内容包括：供应准入与资质、采购合同和付款、税费/运费/汇率、库存和交付验收、金额分级审批、通知、并发版本控制、正式数据库事务、生产密钥、数据保留与合规要求。源码中的 SQLite、模板管理员账号、开发证书、示例密码和 DemoRoleDataSeedContributor 都只适合本地演示；公开部署前必须替换凭据、证书、加密密钥，并重新评估事务、并发和权限。
 
 完成五天后，学习者应该能够打开任意一个按钮对应的 handler，说出它调用的接口和 DTO，继续追到 Application 的权限/归属检查、Domain 的状态规则、EF Core 的表映射，再解释页面如何根据返回 DTO 渲染；也应该能明确区分“源码已经证明的行为”和“需要向业务方确认的真实制度”。
 

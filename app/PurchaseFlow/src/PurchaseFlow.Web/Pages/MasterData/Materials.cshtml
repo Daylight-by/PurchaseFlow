@@ -1,0 +1,143 @@
+@page
+@model PurchaseFlow.Web.Pages.MasterData.MaterialsModel
+@{
+    Layout = "/Pages/Shared/_PurchaseLayout.cshtml";
+    ViewData["Title"] = "物料档案";
+}
+
+<div class="pf-page">
+    <header class="pf-page-heading">
+        <div>
+            <span class="pf-eyebrow">MATERIAL MASTER DATA</span>
+            <h1>物料档案，让明细录入保持一致。</h1>
+            <p>维护编码、名称、规格、单位与分类。采购明细引用档案时仍保存名称/规格快照，档案改名或停用不会改写历史单据。</p>
+        </div>
+        @if (Model.CanManage)
+        {
+            <a class="btn pf-primary" href="#material-form"><i class="fas fa-plus" aria-hidden="true"></i> 新建物料</a>
+        }
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(Model.Error))
+    {
+        <div class="alert alert-danger pf-alert" role="alert">@Model.Error</div>
+    }
+
+    <section class="pf-panel mb-4" aria-label="物料筛选">
+        <div class="pf-panel-heading pf-list-heading">
+            <div><span class="pf-section-kicker">MASTER DATA</span><h2>物料档案 <small>@Model.Result.TotalCount 条</small></h2></div>
+            <form method="get" class="d-flex gap-2 pf-search">
+                <input class="form-control" type="search" name="keyword" value="@Model.Filter.Keyword" placeholder="搜索编码或名称" aria-label="搜索物料" />
+                <select class="form-select" name="isActive" aria-label="按状态筛选">
+                    <option value="" selected="@(Model.Filter.IsActive is null)">全部状态</option>
+                    <option value="true" selected="@(Model.Filter.IsActive == true)">启用</option>
+                    <option value="false" selected="@(Model.Filter.IsActive == false)">停用</option>
+                </select>
+                <button class="btn btn-outline-secondary" type="submit">筛选</button>
+                @if (!string.IsNullOrWhiteSpace(Model.Filter.Keyword) || Model.Filter.IsActive.HasValue)
+                {
+                    <a class="btn btn-light" asp-page="/MasterData/Materials">清除</a>
+                }
+            </form>
+        </div>
+    </section>
+
+    <section class="pf-panel mb-4" aria-labelledby="material-list-title">
+        <div class="pf-panel-heading"><div><span class="pf-section-kicker">MATERIALS</span><h2 id="material-list-title">档案列表 <small>@Model.Result.TotalCount 条</small></h2></div><span class="pf-hint">停用后不能再被新的采购明细引用，历史单据仍保留名称/规格快照</span></div>
+        <div class="table-responsive">
+            <table class="table pf-table mb-0">
+                <thead><tr><th>编码</th><th>物料名称</th><th>规格</th><th>单位</th><th>分类</th><th>状态</th><th class="text-end">操作</th></tr></thead>
+                <tbody>
+                @foreach (var item in Model.Result.Items)
+                {
+                    <tr class="@(Model.EditId == item.Id ? "pf-row-editing" : "")">
+                        <td data-label="编码"><strong>@item.Code</strong></td>
+                        <td data-label="物料名称">@item.Name<span class="pf-row-subtitle">@(string.IsNullOrWhiteSpace(item.Note) ? "无备注" : item.Note)</span></td>
+                        <td data-label="规格" class="pf-muted">@(string.IsNullOrWhiteSpace(item.Specification) ? "—" : item.Specification)</td>
+                        <td data-label="单位">@item.Unit</td>
+                        <td data-label="分类" class="pf-muted">@(string.IsNullOrWhiteSpace(item.Category) ? "—" : item.Category)</td>
+                        <td data-label="状态"><span class="pf-status pf-status-@(item.IsActive ? "approved" : "draft")">@(item.IsActive ? "启用" : "停用")</span></td>
+                        <td data-label="操作" class="text-end">
+                            @if (Model.CanManage)
+                            {
+                                <a class="pf-link" asp-page="/MasterData/Materials" asp-route-editId="@item.Id" asp-route-keyword="@Model.Filter.Keyword" asp-route-isActive="@Model.Filter.IsActive">编辑</a>
+                                <form method="post" asp-page-handler="Toggle" class="d-inline">
+                                    <input type="hidden" name="id" value="@item.Id" />
+                                    <input type="hidden" name="isActive" value="@(item.IsActive ? "false" : "true")" />
+                                    <button class="btn btn-sm btn-link p-0 @(item.IsActive ? "text-danger" : "text-success")" type="submit">@(item.IsActive ? "停用" : "启用")</button>
+                                </form>
+                            }
+                            else
+                            {
+                                <span class="pf-muted">只读</span>
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (Model.Result.Items.Count == 0)
+                {
+                    <tr><td colspan="7" class="pf-empty">还没有物料档案。@(Model.CanManage ? "可以在下方表单新建第一条档案。" : "请联系管理员维护档案。")</td></tr>
+                }
+                </tbody>
+            </table>
+        </div>
+        @if (Model.TotalPages > 1)
+        {
+            <nav class="pf-pagination" aria-label="物料分页">
+                <span>第 @Model.Result.Page / @Model.TotalPages 页</span>
+                <div>
+                    @if (Model.Result.Page > 1) { <a asp-page="/MasterData/Materials" asp-route-keyword="@Model.Filter.Keyword" asp-route-isActive="@Model.Filter.IsActive" asp-route-pageNumber="@(Model.Result.Page - 1)">上一页</a> }
+                    @if (Model.Result.Page < Model.TotalPages) { <a asp-page="/MasterData/Materials" asp-route-keyword="@Model.Filter.Keyword" asp-route-isActive="@Model.Filter.IsActive" asp-route-pageNumber="@(Model.Result.Page + 1)">下一页</a> }
+                </div>
+            </nav>
+        }
+    </section>
+
+    @if (Model.CanManage)
+    {
+        <section class="pf-panel pf-create-panel" id="material-form" aria-labelledby="material-form-title">
+            <div class="pf-panel-heading">
+                <div><span class="pf-section-kicker">MAINTAIN</span><h2 id="material-form-title">@(Model.IsEditing ? "编辑物料档案" : "新建物料档案")</h2></div>
+                <span class="pf-hint">编码会统一转为大写；停用/启用不在这里操作</span>
+            </div>
+            <form method="post" asp-page-handler="Save">
+                <input type="hidden" name="EditIdInput" value="@Model.EditIdInput" />
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-2">
+                        <label class="form-label" for="materialCode">编码</label>
+                        <input class="form-control" id="materialCode" name="Code" value="@Model.Code" maxlength="32" placeholder="例如 MAT-001" required />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" for="materialName">物料名称</label>
+                        <input class="form-control" id="materialName" name="Name" value="@Model.Name" maxlength="100" placeholder="物料名称" required />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" for="materialSpecification">规格</label>
+                        <input class="form-control" id="materialSpecification" name="Specification" value="@Model.Specification" maxlength="100" placeholder="规格型号" />
+                    </div>
+                    <div class="col-md-1">
+                        <label class="form-label" for="materialUnit">单位</label>
+                        <input class="form-control" id="materialUnit" name="Unit" value="@Model.Unit" maxlength="20" placeholder="个" required />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" for="materialCategory">分类</label>
+                        <input class="form-control" id="materialCategory" name="Category" value="@Model.Category" maxlength="50" placeholder="分类" />
+                    </div>
+                </div>
+                <div class="row g-3 align-items-end mt-1">
+                    <div class="col-md-10">
+                        <label class="form-label" for="materialNote">备注</label>
+                        <input class="form-control" id="materialNote" name="Note" value="@Model.Note" maxlength="500" placeholder="材质、供应商建议等" />
+                    </div>
+                    <div class="col-md-2 d-flex gap-2">
+                        <button class="btn pf-primary flex-grow-1" type="submit">@(Model.IsEditing ? "保存修改" : "创建档案")</button>
+                        @if (Model.IsEditing)
+                        {
+                            <a class="btn btn-light" asp-page="/MasterData/Materials" asp-route-keyword="@Model.Filter.Keyword" asp-route-isActive="@Model.Filter.IsActive">取消</a>
+                        }
+                    </div>
+                </div>
+            </form>
+        </section>
+    }
+</div>

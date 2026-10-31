@@ -1,0 +1,153 @@
+@page
+@model PurchaseFlow.Web.Pages.MasterData.SuppliersModel
+@using PurchaseFlow.Purchasing
+@{
+    Layout = "/Pages/Shared/_PurchaseLayout.cshtml";
+    ViewData["Title"] = "供应商档案";
+}
+
+<div class="pf-page">
+    <header class="pf-page-heading">
+        <div>
+            <span class="pf-eyebrow">SUPPLIER MASTER DATA</span>
+            <h1>供应商档案，让报价选择有据可依。</h1>
+            <p>维护编码、联系人、账期与评级。报价引用档案时仍保存名称快照，档案改名或停用不会改写历史单据。</p>
+        </div>
+        @if (Model.CanManage)
+        {
+            <a class="btn pf-primary" href="#supplier-form"><i class="fas fa-plus" aria-hidden="true"></i> 新建供应商</a>
+        }
+    </header>
+
+    @if (!string.IsNullOrWhiteSpace(Model.Error))
+    {
+        <div class="alert alert-danger pf-alert" role="alert">@Model.Error</div>
+    }
+
+    <section class="pf-panel mb-4" aria-label="供应商筛选">
+        <div class="pf-panel-heading pf-list-heading">
+            <div><span class="pf-section-kicker">MASTER DATA</span><h2>供应商档案 <small>@Model.Result.TotalCount 条</small></h2></div>
+            <form method="get" class="d-flex gap-2 pf-search">
+                <input class="form-control" type="search" name="keyword" value="@Model.Filter.Keyword" placeholder="搜索编码或名称" aria-label="搜索供应商" />
+                <select class="form-select" name="isActive" aria-label="按状态筛选">
+                    <option value="" selected="@(Model.Filter.IsActive is null)">全部状态</option>
+                    <option value="true" selected="@(Model.Filter.IsActive == true)">启用</option>
+                    <option value="false" selected="@(Model.Filter.IsActive == false)">停用</option>
+                </select>
+                <button class="btn btn-outline-secondary" type="submit">筛选</button>
+                @if (!string.IsNullOrWhiteSpace(Model.Filter.Keyword) || Model.Filter.IsActive.HasValue)
+                {
+                    <a class="btn btn-light" asp-page="/MasterData/Suppliers">清除</a>
+                }
+            </form>
+        </div>
+    </section>
+
+    <section class="pf-panel mb-4" aria-labelledby="supplier-list-title">
+        <div class="pf-panel-heading"><div><span class="pf-section-kicker">SUPPLIERS</span><h2 id="supplier-list-title">档案列表 <small>@Model.Result.TotalCount 条</small></h2></div><span class="pf-hint">停用后不能再被新报价引用，历史单据仍保留名称快照</span></div>
+        <div class="table-responsive">
+            <table class="table pf-table mb-0">
+                <thead><tr><th>编码</th><th>供应商名称</th><th>联系人</th><th>账期</th><th>评级</th><th>状态</th><th class="text-end">操作</th></tr></thead>
+                <tbody>
+                @foreach (var item in Model.Result.Items)
+                {
+                    <tr class="@(Model.EditId == item.Id ? "pf-row-editing" : "")">
+                        <td data-label="编码"><strong>@item.Code</strong></td>
+                        <td data-label="供应商名称">@item.Name<span class="pf-row-subtitle">@(string.IsNullOrWhiteSpace(item.Note) ? "无备注" : item.Note)</span></td>
+                        <td data-label="联系人" class="pf-muted">@(string.IsNullOrWhiteSpace(item.ContactName) ? "—" : item.ContactName)@(string.IsNullOrWhiteSpace(item.ContactPhone) ? "" : " · " + item.ContactPhone)</td>
+                        <td data-label="账期">@item.PaymentTermsDays 天</td>
+                        <td data-label="评级"><span class="pf-status pf-status-@item.Rating.ToString().ToLowerInvariant()">@PurchaseFlow.Web.Pages.MasterData.SuppliersModel.RatingText(item.Rating)</span></td>
+                        <td data-label="状态"><span class="pf-status pf-status-@(item.IsActive ? "approved" : "draft")">@(item.IsActive ? "启用" : "停用")</span></td>
+                        <td data-label="操作" class="text-end">
+                            @if (Model.CanManage)
+                            {
+                                <a class="pf-link" asp-page="/MasterData/Suppliers" asp-route-editId="@item.Id" asp-route-keyword="@Model.Filter.Keyword" asp-route-isActive="@Model.Filter.IsActive">编辑</a>
+                                <form method="post" asp-page-handler="Toggle" class="d-inline">
+                                    <input type="hidden" name="id" value="@item.Id" />
+                                    <input type="hidden" name="isActive" value="@(item.IsActive ? "false" : "true")" />
+                                    <button class="btn btn-sm btn-link p-0 @(item.IsActive ? "text-danger" : "text-success")" type="submit">@(item.IsActive ? "停用" : "启用")</button>
+                                </form>
+                            }
+                            else
+                            {
+                                <span class="pf-muted">只读</span>
+                            }
+                        </td>
+                    </tr>
+                }
+                @if (Model.Result.Items.Count == 0)
+                {
+                    <tr><td colspan="7" class="pf-empty">还没有供应商档案。@(Model.CanManage ? "可以在下方表单新建第一条档案。" : "请联系管理员维护档案。")</td></tr>
+                }
+                </tbody>
+            </table>
+        </div>
+        @if (Model.TotalPages > 1)
+        {
+            <nav class="pf-pagination" aria-label="供应商分页">
+                <span>第 @Model.Result.Page / @Model.TotalPages 页</span>
+                <div>
+                    @if (Model.Result.Page > 1) { <a asp-page="/MasterData/Suppliers" asp-route-keyword="@Model.Filter.Keyword" asp-route-isActive="@Model.Filter.IsActive" asp-route-pageNumber="@(Model.Result.Page - 1)">上一页</a> }
+                    @if (Model.Result.Page < Model.TotalPages) { <a asp-page="/MasterData/Suppliers" asp-route-keyword="@Model.Filter.Keyword" asp-route-isActive="@Model.Filter.IsActive" asp-route-pageNumber="@(Model.Result.Page + 1)">下一页</a> }
+                </div>
+            </nav>
+        }
+    </section>
+
+    @if (Model.CanManage)
+    {
+        <section class="pf-panel pf-create-panel" id="supplier-form" aria-labelledby="supplier-form-title">
+            <div class="pf-panel-heading">
+                <div><span class="pf-section-kicker">MAINTAIN</span><h2 id="supplier-form-title">@(Model.IsEditing ? "编辑供应商档案" : "新建供应商档案")</h2></div>
+                <span class="pf-hint">编码会统一转为大写；停用/启用不在这里操作</span>
+            </div>
+            <form method="post" asp-page-handler="Save">
+                <input type="hidden" name="EditIdInput" value="@Model.EditIdInput" />
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-2">
+                        <label class="form-label" for="supplierCode">编码</label>
+                        <input class="form-control" id="supplierCode" name="Code" value="@Model.Code" maxlength="32" placeholder="例如 SUP-001" required />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" for="supplierName">供应商名称</label>
+                        <input class="form-control" id="supplierName" name="Name" value="@Model.Name" maxlength="100" placeholder="供应商全称" required />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label" for="supplierContactName">联系人</label>
+                        <input class="form-control" id="supplierContactName" name="ContactName" value="@Model.ContactName" maxlength="50" placeholder="联系人" />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label" for="supplierContactPhone">联系电话</label>
+                        <input class="form-control" id="supplierContactPhone" name="ContactPhone" value="@Model.ContactPhone" maxlength="30" placeholder="电话" />
+                    </div>
+                    <div class="col-md-1">
+                        <label class="form-label" for="supplierPaymentTerms">账期</label>
+                        <input class="form-control" id="supplierPaymentTerms" name="PaymentTermsDays" value="@Model.PaymentTermsDays" type="number" min="0" max="365" step="1" required />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label" for="supplierRating">评级</label>
+                        <select class="form-select" id="supplierRating" name="Rating">
+                            @foreach (var rating in PurchaseFlow.Web.Pages.MasterData.SuppliersModel.Ratings)
+                            {
+                                <option value="@rating" selected="@(Model.Rating == rating)">@PurchaseFlow.Web.Pages.MasterData.SuppliersModel.RatingText(rating)</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+                <div class="row g-3 align-items-end mt-1">
+                    <div class="col-md-10">
+                        <label class="form-label" for="supplierNote">备注</label>
+                        <input class="form-control" id="supplierNote" name="Note" value="@Model.Note" maxlength="500" placeholder="服务范围、结算约定等" />
+                    </div>
+                    <div class="col-md-2 d-flex gap-2">
+                        <button class="btn pf-primary flex-grow-1" type="submit">@(Model.IsEditing ? "保存修改" : "创建档案")</button>
+                        @if (Model.IsEditing)
+                        {
+                            <a class="btn btn-light" asp-page="/MasterData/Suppliers" asp-route-keyword="@Model.Filter.Keyword" asp-route-isActive="@Model.Filter.IsActive">取消</a>
+                        }
+                    </div>
+                </div>
+            </form>
+        </section>
+    }
+</div>

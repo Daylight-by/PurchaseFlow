@@ -75,10 +75,24 @@ public class PurchaseRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
 
     #region Lines
 
+    /// <summary>
+    /// 旧签名保留：不关联物料档案（MaterialId=null），委托给带 materialId 的新重载，
+    /// 保证轮次 1 的调用方与旧测试不受影响。
+    /// </summary>
     public PurchaseRequestLine AddLine(Guid id, string itemName, string specification, decimal quantity, decimal unitPrice)
     {
+        return AddLine(id, itemName, specification, quantity, unitPrice, materialId: null);
+    }
+
+    /// <summary>
+    /// 第二轮主数据：新增明细时可关联物料档案。ItemName/Specification 仍作为快照
+    /// 传入（应用层会优先用档案的名称/规格覆盖），MaterialId 仅做溯源。
+    /// </summary>
+    public PurchaseRequestLine AddLine(Guid id, string itemName, string specification, decimal quantity, decimal unitPrice,
+        Guid? materialId)
+    {
         EnsureEditable();
-        var line = new PurchaseRequestLine(id, TenantId, Id, itemName, specification, quantity, unitPrice);
+        var line = new PurchaseRequestLine(id, TenantId, Id, itemName, specification, quantity, unitPrice, materialId);
         Lines.Add(line);
         return line;
     }
@@ -95,11 +109,23 @@ public class PurchaseRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
     /// <summary>
     /// Replaces the whole line set. Lines are validated before anything is
     /// changed, so a rejected edit never leaves the request half updated.
+    /// 旧 5 元组重载保留：委托给 6 元组新重载并把 MaterialId 置 null，
+    /// 保证轮次 1 的调用方/旧测试不用改（旧数据与手工录入不关联档案）。
     /// </summary>
     public void SetLines(IEnumerable<(Guid Id, string ItemName, string Specification, decimal Quantity, decimal UnitPrice)> lines)
     {
+        SetLines((lines ?? Enumerable.Empty<(Guid Id, string ItemName, string Specification, decimal Quantity, decimal UnitPrice)>())
+            .Select(line => (line.Id, line.ItemName, line.Specification, line.Quantity, line.UnitPrice, (Guid?)null)));
+    }
+
+    /// <summary>
+    /// 第二轮主数据：带 MaterialId 的新重载。其余校验与轮次 1（P1-3）完全一致：
+    /// 先校验全部行 → 重复 Id 拒绝 → 按 Id 就地更新/新增/删除旧行。
+    /// </summary>
+    public void SetLines(IEnumerable<(Guid Id, string ItemName, string Specification, decimal Quantity, decimal UnitPrice, Guid? MaterialId)> lines)
+    {
         EnsureEditable();
-        var drafts = lines?.ToList() ?? new List<(Guid, string, string, decimal, decimal)>();
+        var drafts = lines?.ToList() ?? new List<(Guid, string, string, decimal, decimal, Guid?)>();
 
         // 原“先校验全部行、再修改集合”的顺序保持不变：校验失败时聚合根不被改动。
         foreach (var draft in drafts)
@@ -125,9 +151,9 @@ public class PurchaseRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
         foreach (var draft in drafts)
         {
             if (existingById.TryGetValue(draft.Id, out var existing))
-                existing.Update(draft.ItemName, draft.Specification, draft.Quantity, draft.UnitPrice);
+                existing.Update(draft.ItemName, draft.Specification, draft.Quantity, draft.UnitPrice, draft.MaterialId);
             else
-                AddLine(draft.Id, draft.ItemName, draft.Specification, draft.Quantity, draft.UnitPrice);
+                AddLine(draft.Id, draft.ItemName, draft.Specification, draft.Quantity, draft.UnitPrice, draft.MaterialId);
         }
 
         var submittedIds = drafts.Select(x => x.Id).ToHashSet();
@@ -143,13 +169,16 @@ public class PurchaseRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
     /// P0-1：报价从“手填总额”改为“按需求明细逐项报价”。每条需求明细都必须
     /// 提供一个成交单价，报价总额由明细汇总得出，从根本上保证
     /// “报价合计 = 明细合计”，审批生成的订单金额也才有可信来源。
+    /// 第二轮主数据：可选 supplierId 关联供应商档案（SupplierName 仍是名称快照，
+    /// 应用层在传档案时已用档案名称覆盖）。
     /// </summary>
     public SupplierQuote AddQuote(
         Guid id,
         string supplierName,
         int deliveryDays,
         string? note,
-        IReadOnlyList<(Guid Id, Guid RequestLineId, decimal UnitPrice)> quotedLines)
+        IReadOnlyList<(Guid Id, Guid RequestLineId, decimal UnitPrice)> quotedLines,
+        Guid? supplierId = null)
     {
         EnsureEditable();
 
@@ -185,7 +214,7 @@ public class PurchaseRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
         //    AddLine 触发 RecalculateAmount；物料/规格/数量一律取需求行快照，
         //    客户端只提供单价，无法篡改快照内容。
         var quotedByRequestLineId = quotedLines.ToDictionary(x => x.RequestLineId);
-        var quote = new SupplierQuote(id, TenantId, Id, name, deliveryDays, note);
+        var quote = new SupplierQuote(id, TenantId, Id, name, deliveryDays, note, supplierId);
         foreach (var requestLine in Lines)
         {
             var quoted = quotedByRequestLineId[requestLine.Id];

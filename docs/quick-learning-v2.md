@@ -4,9 +4,9 @@
 
 ## 0. 当前基线与学习边界
 
-当前仓库是一个可本地运行的教学业务切片：.NET 10、ABP 10.6.2、ASP.NET Core Razor Pages、EF Core、SQLite。主流程是“采购需求 → 供应商报价 → 选择依据 → 提交审核 → 退回或批准”。三类核心业务记录是 `PurchaseRequest`、`SupplierQuote`、`ReviewEvent`；Identity、权限、租户、审计等由 ABP 模块提供。
+当前仓库是一个可本地运行的教学业务切片：.NET 10、ABP 10.6.2、ASP.NET Core Razor Pages、EF Core、SQLite。主流程是“采购需求 → 供应商报价 → 选择依据 → 提交审核 → 退回或批准”。三类核心业务记录是 `PurchaseRequest`、`SupplierQuote`、`ReviewEvent`，另有 `Supplier`、`Material` 主数据档案；Identity、权限、租户、审计等由 ABP 模块提供。
 
-源码能确认的示例规则包括：销售金额大于零、每条报价单价不小于零、报价必须逐项覆盖当前需求全部明细（合计由服务端按明细汇总）、交付天数不小于零；提交至少两条报价；选中报价必须属于当前需求并填写理由；草稿和已退回可编辑；待审核和已批准不可编辑；退回需要审核意见；批准后进入冻结状态；预计毛利等于销售金额减选中报价；同一需求内供应商名称不区分大小写地不能重复。这些都是教学切片规则，不是莫先生所在公司的制度。
+源码能确认的示例规则包括：销售金额大于零、每条报价单价不小于零、报价必须逐项覆盖当前需求全部明细（合计由服务端按明细汇总）、交付天数不小于零；提交至少两条报价；选中报价必须属于当前需求并填写理由；草稿和已退回可编辑；待审核和已批准不可编辑；退回需要审核意见；批准后进入冻结状态；预计毛利等于销售金额减选中报价；同一需求内供应商名称不区分大小写地不能重复；供应商与物料档案编码在租户内唯一，档案可停用、停用后不能再被新报价或新需求明细引用，单据上的名称/规格仍是快照。这些都是教学切片规则，不是莫先生所在公司的制度。
 
 新增的分析能力只服务于比较和提示：服务端 `QuoteDecisionAnalyzer.Analyze` 是无 I/O 的静态计算，给出三项提交检查、最低价/最快交期（支持并列）、预计毛利率、Pareto 价期均不占优和负毛利提示。提示不会阻止提交。详情页的“决策实验台”在浏览器端按价格/交期权重计算相对分数，调节权重不会改变已选报价，也不写数据库。独立 A4“决策简报”读取详情 DTO，打印动作是浏览器的 `window.print()`。运行时这些功能不生成 AI 内容；项目的页面、后端和测试曾借助 AI 生成并迭代，学习者正在按代码链路学习和验证，报价、理由和业务规则仍是示例数据与人工输入。
 
@@ -51,7 +51,7 @@ Set-Location ..\PurchaseFlow.Web
 dotnet run --launch-profile PurchaseFlow.Web
 ```
 
-本机启动脚本 `启动项目.cmd` 会调用 `start-project.ps1`。新电脑首次初始化时，迁移器会创建 `buyer`、`reviewer` 角色；演示用户只有在本机私密配置提供密码时才会创建。若使用本地 HTTPS 证书遇到问题，可按本机环境执行 `dotnet dev-certs https --trust`。不要把密码、证书或私密配置写入仓库。
+本机启动脚本 `启动项目.cmd` 会调用 `start-project.ps1`。新电脑首次初始化时，迁移器会创建 `buyer`、`reviewer`、`receiver` 角色并播种演示主数据；演示用户只有在本机私密配置提供密码时才会创建。若使用本地 HTTPS 证书遇到问题，可按本机环境执行 `dotnet dev-certs https --trust`。不要把密码、证书或私密配置写入仓库。
 
 ## 2. 90 分钟上手路线
 
@@ -101,7 +101,7 @@ dotnet run --launch-profile PurchaseFlow.Web
 
 ### 第二天：持久化、ABP 基础设施和表达
 
-上午读 `PurchaseFlowDbContext.OnModelCreating`、EF Core 模块和 7 个迁移（InitialCreate、HostOrderReferenceUnique、AddPurchaseRequestLines、AddPurchaseOrders、AddGoodsReceipts、AddReceiptConcurrency、AddSupplierQuoteLines）。确认业务 DbSet（需求/明细、报价/报价明细、订单/明细、收货/明细、审核记录）、列长度、金额精度、外键级联、租户索引和宿主 `TenantId IS NULL` 的部分唯一索引。理解 `AddDefaultRepositories(includeAllEntities: true)` 为什么让非聚合根报价和审核记录也有默认仓储。
+上午读 `PurchaseFlowDbContext.OnModelCreating`、EF Core 模块和 8 个迁移（InitialCreate、HostOrderReferenceUnique、AddPurchaseRequestLines、AddPurchaseOrders、AddGoodsReceipts、AddReceiptConcurrency、AddSupplierQuoteLines、AddMasterData）。确认业务 DbSet（需求/明细、报价/报价明细、订单/明细、收货/明细、审核记录、供应商档案、物料档案）、列长度、金额精度、外键级联、租户索引和宿主 `TenantId IS NULL` 的部分唯一索引。理解 `AddDefaultRepositories(includeAllEntities: true)` 为什么让非聚合根报价和审核记录也有默认仓储。
 
 中午专门核对租户与工作单元边界：实体实现 `IMultiTenant` 并保存 `TenantId`；Application 创建时写入 `CurrentTenant.Id`；ABP 数据过滤和当前租户上下文共同影响查询。Web 管线调用 `UseMultiTenancy`、`UseUnitOfWork`、`UseAuthorization`，但 EF Core 模块把 `TransactionBehavior` 设为 `Disabled`。所以“同一请求通常共享工作单元”不能表述成生产级事务保证，切换正式数据库时必须重新设计和验证事务、并发与重试。
 
@@ -138,6 +138,8 @@ dotnet run --launch-profile PurchaseFlow.Web
 | 提交审核 | `OnPostSubmitAsync` | `SubmitAsync` → `request.Submit` → `AddEventAsync("Submitted")` | 至少两条报价、有效选择、非空理由；进入 `PendingReview`。 |
 | 批准需求 | `OnPostApproveAsync` | `ApproveAsync` → `request.Approve` → `AddEventAsync("Approved")` | 需要 `ReviewRequests`，仅 `PendingReview` 可批准。 |
 | 退回修改 | `OnPostReturnAsync` | `ReturnAsync` → `request.Return` → `AddEventAsync("Returned")` | Application 和页面都要求意见；进入 `Returned`。 |
+| 供应商档案 | `Pages/MasterData/Suppliers.cshtml.cs` | `ISupplierAppService.GetListAsync` / `CreateAsync` / `UpdateAsync` / `SetActiveAsync` | 查看需 `MasterData`；新建/编辑/启停用需 `ManageMasterData`；编码租户内唯一，停用后不能再被新报价引用。 |
+| 物料档案 | `Pages/MasterData/Materials.cshtml.cs` | `IMaterialAppService` 同名方法 | 查看需 `MasterData`；维护需 `ManageMasterData`；编码租户内唯一、单位必填，停用后不能再被新需求明细引用。 |
 | 查看决策简报 | `BriefModel.OnGetAsync` | `GetAsync` | 读取详情 DTO；页面的“打印简报”只调用 `window.print()`。 |
 | 调整实验台权重 | `Details.cshtml` + `wwwroot/js/purchaseflow.js` | 浏览器端 `render()` | 只按当前 DOM 报价计算相对分数；不调用应用服务、不写库、不改变已选报价。 |
 
@@ -184,6 +186,8 @@ dotnet run --launch-profile PurchaseFlow.Web
 
 这些记录是本机演示数据，不代表真实订单或公司制度。
 
+主数据演示种子（`DemoMasterDataSeedContributor`，host-only、按编码幂等）：供应商 SUP-001 华东办公家具（A/30 天）、SUP-002 南方办公（B/15 天）、SUP-003 北方机电（B/45 天）；物料 MAT-001 办公椅（人体工学/把）、MAT-002 会议桌（2.4m/张）、MAT-003 深沟球轴承（6205-2RS/个）、MAT-004 骨架油封（NBR 20x3/个）。
+
 ## 8. 核心业务表
 
 | 逻辑表/实体 | 关键字段 | 关系与用途 |
@@ -192,7 +196,10 @@ dotnet run --launch-profile PurchaseFlow.Web
 | `AppSupplierQuotes` / `SupplierQuote` | `TenantId`、`PurchaseRequestId`、`SupplierName`、`Amount`、`DeliveryDays`、`Note` | 报价记录；`Amount` 由报价明细汇总并随明细变化重算（存储列，便于 Dashboard 只查报价表时取到金额）。通过 `PurchaseRequestId` 关联需求，外键级联删除。报价不是当前代码中的聚合内集合，而是独立 `Entity<Guid>`。 |
 | `AppSupplierQuoteLines` / `SupplierQuoteLine` | `TenantId`、`SupplierQuoteId`、`PurchaseRequestLineId`、`ItemName`、`Specification`、`Quantity`、`UnitPrice` | 报价明细：按需求明细逐项记录成交单价，小计 = 数量 × 单价（2 位四舍五入）；`PurchaseRequestLineId` 只作需求行快照来源，不建外键。报价合计必须等于明细合计。 |
 | `AppReviewEvents` / `ReviewEvent` | `TenantId`、`PurchaseRequestId`、`ActorUserId`、`Action`、`Comment`、`OccurredAtUtc` | 提交、退回、批准的可追溯事件；同样关联需求并级联删除，按发生时间索引。 |
+| `AppSuppliers` / `Supplier` | `TenantId`、`Code`、`Name`、`ContactName`、`ContactPhone`、`PaymentTermsDays`、`Rating`、`IsActive`、`Note` | 供应商主数据；`(TenantId, Code)` 唯一，宿主另有过滤唯一索引；被报价/订单以可空 `SupplierId` 引用（不建外键），单据仍存名称快照。 |
+| `AppMaterials` / `Material` | `TenantId`、`Code`、`Name`、`Specification`、`Unit`、`Category`、`IsActive`、`Note` | 物料主数据；`(TenantId, Code)` 唯一；被需求明细以可空 `MaterialId` 引用（不建外键），明细仍存名称/规格快照。 |
 
+另有三列可空引用：`AppPurchaseRequestLines.MaterialId`、`AppSupplierQuotes.SupplierId`、`AppPurchaseOrders.SupplierId`。
 核心业务表之外还有报价明细、采购订单、收货等表，以及 ABP Identity、权限、审计、租户、OpenIddict 等基础设施表；不要把教学切片的表说成完整采购系统的全部数据模型。
 
 ## 9. 权限、状态、租户和 UOW 边界
@@ -202,7 +209,8 @@ dotnet run --launch-profile PurchaseFlow.Web
 - `PurchaseFlowPermissions.Requests`：查看工作台与需求。
 - `PurchaseFlowPermissions.EditRequests`：创建、修改、报价增删、选择、提交。
 - `PurchaseFlowPermissions.ReviewRequests`：批准和退回。
-- `buyer` 角色由迁移器授予查看+编辑；`reviewer` 角色授予查看+审核。演示角色种子只在宿主上下文执行，演示用户是否创建取决于本机私密密码配置。管理员的实际权限以当前环境为准。
+- `PurchaseFlowPermissions.MasterData`：查看供应商档案与物料档案（用于选择）；`MasterData.Manage`：新建、编辑、启停用档案。
+- `buyer`、`reviewer`、`receiver` 角色由迁移器创建：业务角色都获得查看权限（含主数据查看），`admin` 额外拥有主数据维护权限。演示角色种子只在宿主上下文执行，演示用户是否创建取决于本机私密密码配置；管理员的实际权限以当前环境为准。
 
 ### 状态
 
@@ -270,7 +278,7 @@ Web 管线使用 `UseUnitOfWork`，应用服务一次调用通常在同一个工
 ## 12. 复现与交付检查
 
 - 当前记录的浏览器验收覆盖 1440、1280、768、390、360 宽度；匿名首页/简报权限、实验台 0/100/reset 无网络写入、警示和 A4 简报均已通过。这是已记录场景的结果，不等于所有 UI 或业务场景全覆盖。
-- 当前完整 `dotnet test PurchaseFlow.slnx` 记录为 79 项通过：Domain 23、Application 11、EF Core 41、Web 4。复现时仍应按本机环境重新执行并保留输出。
+- 当前完整 `dotnet test PurchaseFlow.slnx` 记录为 112 项通过：Domain 43、Application 11、EF Core 50、Web 8。复现时仍应按本机环境重新执行并保留输出。
 - 最终演示应使用现场真实可登录的角色权限；不要在文档、截图或消息中暴露私密凭据。
 - GitHub 仓库链接仍待补充；正式数据库、事务/并发方案和真实业务确认仍待交付。
 

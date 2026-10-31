@@ -11,6 +11,13 @@ public class SupplierQuote : Entity<Guid>, IMultiTenant
 {
     public Guid? TenantId { get; private set; }
     public Guid PurchaseRequestId { get; private set; }
+
+    /// <summary>
+    /// 第二轮主数据：关联的供应商档案 Id（可空）。SupplierName 仍是名称快照，
+    /// 档案改名不影响历史报价；刻意不建外键，档案停用/删除历史报价仍可读。
+    /// </summary>
+    public Guid? SupplierId { get; private set; }
+
     public string SupplierName { get; private set; } = string.Empty;
 
     /// <summary>
@@ -32,14 +39,17 @@ public class SupplierQuote : Entity<Guid>, IMultiTenant
     /// <summary>
     /// P0-1：构造不再接收手填金额（amount 参数已删除），报价金额初始为 0，
     /// 完全由随后 <see cref="AddLine"/> 加入的明细重算得出。
+    /// 第二轮主数据：supplierId 放在最后且可选，旧调用（不关联档案）不用改。
     /// </summary>
-    public SupplierQuote(Guid id, Guid? tenantId, Guid purchaseRequestId, string supplierName, int deliveryDays, string? note)
+    public SupplierQuote(Guid id, Guid? tenantId, Guid purchaseRequestId, string supplierName, int deliveryDays, string? note,
+        Guid? supplierId = null)
         : base(id)
     {
         if (deliveryDays < 0)
             throw new BusinessException(PurchaseFlowErrors.InvalidAmount);
         TenantId = tenantId;
         PurchaseRequestId = purchaseRequestId;
+        SupplierId = supplierId;
         SupplierName = Check.NotNullOrWhiteSpace(supplierName, nameof(supplierName), maxLength: 100).Trim();
         Amount = 0m;
         DeliveryDays = deliveryDays;

@@ -20,6 +20,14 @@ public static class PurchaseFlowErrors
     public const string QuoteLineMismatch = "PurchaseFlow:QuoteLineMismatch";
     public const string DuplicateLineId = "PurchaseFlow:DuplicateLineId";
     public const string LineNotInRequest = "PurchaseFlow:LineNotInRequest";
+
+    // 第二轮第 1 批（主数据）：供应商/物料档案的编码与启停用规则。
+    public const string InvalidSupplierCode = "PurchaseFlow:InvalidSupplierCode";
+    public const string DuplicateSupplierCode = "PurchaseFlow:DuplicateSupplierCode";
+    public const string SupplierInactive = "PurchaseFlow:SupplierInactive";
+    public const string InvalidMaterialCode = "PurchaseFlow:InvalidMaterialCode";
+    public const string DuplicateMaterialCode = "PurchaseFlow:DuplicateMaterialCode";
+    public const string MaterialInactive = "PurchaseFlow:MaterialInactive";
     public const string InvalidReceiptDate = "PurchaseFlow:InvalidReceiptDate";
     public const string InvalidReceiptKey = "PurchaseFlow:InvalidReceiptKey";
     public const string InvalidReceiptLines = "PurchaseFlow:InvalidReceiptLines";

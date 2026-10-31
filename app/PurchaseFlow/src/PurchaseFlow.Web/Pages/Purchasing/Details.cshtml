@@ -189,7 +189,15 @@
                         var isFastest = decision.FastestQuoteIds.Contains(quote.Id);
                         var isDominated = decision.DominatedQuoteIds.Contains(quote.Id);
                         <tr class="@(isSelected ? "pf-quote-selected" : "") @(isDominated ? "pf-quote-dominated" : "")">
-                            <td data-label="供应商 / 备注"><strong>@quote.SupplierName</strong><span class="pf-row-subtitle">@(string.IsNullOrWhiteSpace(quote.Note) ? "无补充说明" : quote.Note)</span></td>
+                            <td data-label="供应商 / 备注">
+                                <strong>@quote.SupplierName</strong>
+                                <span class="pf-row-subtitle">@(string.IsNullOrWhiteSpace(quote.Note) ? "无补充说明" : quote.Note)</span>
+                                @if (quote.SupplierId.HasValue)
+                                {
+                                    @* 第二轮第 1 批：报价关联了供应商档案时给出提示；档案已停用则提示不可再用于新报价。 *@
+                                    <span class="pf-row-subtitle">@(Model.IsKnownSupplier(quote.SupplierId) ? "已关联供应商档案" : "关联的供应商档案已停用")</span>
+                                }
+                            </td>
                             <td data-label="采购报价" class="pf-money">¥@quote.Amount.ToString("N2")</td>
                             <td data-label="交付">@quote.DeliveryDays 天</td>
                             <td data-label="预计毛利" class="pf-money @(quote.ExpectedGrossProfit < 0 ? "pf-money-negative" : "")">¥@quote.ExpectedGrossProfit.ToString("N2")</td>
@@ -279,10 +287,26 @@
                页面只提交需求明细 Id 与报价单价，报价总额由后端按明细小计汇总。 *@
             <form method="post" asp-page-handler="AddQuote" asp-route-id="@Model.PurchaseRequest.Id" class="pf-add-quote-form mt-3" data-quote-editor>
                 <div class="row g-2 align-items-end">
-                    <div class="col-md-3"><label class="form-label" for="supplierName">供应商</label><input class="form-control" id="supplierName" name="supplierName" placeholder="供应商名称" maxlength="100" required /></div>
+                    @* 第二轮第 1 批：优先从供应商档案选择（显示“编码 - 名称”）；不选则沿用旧的手工名称录入。
+                       选中档案后由 JS 把名称填入文本框并写隐藏 SupplierId，名称快照最终由服务端按档案覆盖。 *@
+                    <div class="col-md-3">
+                        <label class="form-label" for="supplierIdSelect">供应商档案</label>
+                        <select class="form-select" id="supplierIdSelect" data-supplier-select aria-label="选择供应商档案（可选）">
+                            <option value="">不选档案（手工填写名称）</option>
+                            @foreach (var supplier in Model.Suppliers)
+                            {
+                                <option value="@supplier.Id" data-supplier-name="@supplier.Name">@supplier.Code - @supplier.Name</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label" for="supplierName">供应商</label>
+                        <input class="form-control" id="supplierName" data-supplier-name-input name="supplierName" placeholder="供应商名称（选择档案后自动填入）" maxlength="100" required />
+                        <input type="hidden" name="supplierId" data-supplier-id value="" />
+                    </div>
                     <div class="col-md-2"><label class="form-label" for="deliveryDays">交付天数</label><input class="form-control" id="deliveryDays" name="deliveryDays" type="number" min="0" required /></div>
-                    <div class="col-md-4"><label class="form-label" for="note">备注</label><input class="form-control" id="note" name="note" maxlength="500" placeholder="服务或条款差异" /></div>
-                    <div class="col-md-3"><button class="btn btn-outline-primary w-100" type="submit">添加报价</button></div>
+                    <div class="col-md-2"><label class="form-label" for="note">备注</label><input class="form-control" id="note" name="note" maxlength="500" placeholder="差异" /></div>
+                    <div class="col-md-2"><button class="btn btn-outline-primary w-100" type="submit">添加报价</button></div>
                 </div>
 
                 @if (Model.PurchaseRequest.Lines.Count == 0)
@@ -334,7 +358,7 @@
                 <span class="pf-hint">审批通过后按已选报价自动生成，可直接发给供应商</span>
             </div>
             <div class="pf-metric-grid mb-3">
-                <div class="pf-metric"><span>供应商</span><strong style="font-size:18px">@order.SupplierName</strong><small>来自已选报价</small></div>
+                <div class="pf-metric"><span>供应商</span><strong style="font-size:18px">@order.SupplierName</strong><small>@(order.SupplierId.HasValue ? (Model.IsKnownSupplier(order.SupplierId) ? "来自已选报价 · 已关联供应商档案" : "来自已选报价 · 关联档案已停用") : "来自已选报价（手工名称）")</small></div>
                 <div class="pf-metric"><span>订单金额</span><strong>¥@order.Amount.ToString("N2")</strong><small>以选中报价为准</small></div>
                 <div class="pf-metric"><span>交付</span><strong>@order.DeliveryDays 天</strong><small>供应商承诺交期</small></div>
                 <div class="pf-metric"><span>订单状态</span><strong style="font-size:18px">@(Model.PurchaseOrderReceipts is { } receiptSummary ? PurchaseFlow.Web.Pages.Purchasing.DetailsModel.ReceiptStatusText(receiptSummary) : PurchaseFlow.Web.Pages.Purchasing.DetailsModel.OrderStatusText(order.Status))</strong><small>生成于 @order.CreationTime.ToString("yyyy-MM-dd HH:mm")</small></div>
@@ -493,10 +517,12 @@
                     <div class="col-md-2"><label class="form-label" for="saleAmount">销售金额（元）</label><input class="form-control" id="saleAmount" name="SaleAmount" value="@Model.SaleAmount" type="number" min="0.01" step="0.01" required /></div>
                     <div class="col-md-2"><button class="btn btn-outline-secondary w-100" type="submit">保存修改</button></div>
                 </div>
+                @* 第二轮第 1 批：编辑采购需求时同样可以通过「物料档案」下拉规范明细录入。 *@
                 @await Html.PartialAsync("_LineEditor", new LineEditorModel
                 {
                     Prefix = "Lines",
-                    Rows = Model.Lines
+                    Rows = Model.Lines,
+                    Materials = Model.Materials
                 })
             </form>
         </details>

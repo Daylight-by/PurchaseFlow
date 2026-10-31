@@ -44,6 +44,11 @@ public class DemoRoleDataSeedContributor : IDataSeedContributor, ITransientDepen
         await EnsureRoleAsync("reviewer", PurchaseFlowPermissions.ReviewRequests, canViewReceipts: true);
         await EnsureRoleAsync("receiver", PurchaseFlowPermissions.RegisterReceipts, canViewReceipts: true);
 
+        // 第二轮主数据：管理员（ABP 模板 IdentityDataSeeder 创建）同时拥有查看与维护权限；
+        // 业务角色只授予查看（see EnsureRoleAsync），避免演示账号误改档案。
+        await _permissionManager.SetForRoleAsync("admin", PurchaseFlowPermissions.MasterData, true);
+        await _permissionManager.SetForRoleAsync("admin", PurchaseFlowPermissions.ManageMasterData, true);
+
         // Demo accounts are created unconditionally with well-known demo
         // passwords, so a freshly deployed instance is directly usable for
         // evaluation (the credentials are shown on the login page).
@@ -63,6 +68,9 @@ public class DemoRoleDataSeedContributor : IDataSeedContributor, ITransientDepen
         await _permissionManager.SetForRoleAsync(name, PurchaseFlowPermissions.ViewReceipts, canViewReceipts);
         await _permissionManager.SetForRoleAsync(name, PurchaseFlowPermissions.RegisterReceipts,
             string.Equals(actionPermission, PurchaseFlowPermissions.RegisterReceipts, StringComparison.Ordinal));
+        // 第二轮主数据：业务角色都能“查看”供应商/物料档案（用于报价与需求明细选择），
+        // 但不授予 ManageMasterData —— 维护权限只给管理员。
+        await _permissionManager.SetForRoleAsync(name, PurchaseFlowPermissions.MasterData, true);
     }
 
     private async Task EnsureUserAsync(string userName, string email, string role, string? password)

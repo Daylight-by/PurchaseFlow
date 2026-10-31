@@ -14,6 +14,10 @@ public class PurchaseFlowPermissionDefinitionProvider : PermissionDefinitionProv
         requests.AddChild(PurchaseFlowPermissions.ReviewRequests, L("Permission:ReviewRequests"));
         myGroup.AddPermission(PurchaseFlowPermissions.ViewReceipts, L("Permission:ViewReceipts"));
         myGroup.AddPermission(PurchaseFlowPermissions.RegisterReceipts, L("Permission:RegisterReceipts"));
+
+        // 第二轮第 1 批：主数据查看/维护分离，避免“能看档案”被误当成“能改档案”。
+        var masterData = myGroup.AddPermission(PurchaseFlowPermissions.MasterData, L("Permission:MasterData"));
+        masterData.AddChild(PurchaseFlowPermissions.ManageMasterData, L("Permission:ManageMasterData"));
     }
 
     private static LocalizableString L(string name)

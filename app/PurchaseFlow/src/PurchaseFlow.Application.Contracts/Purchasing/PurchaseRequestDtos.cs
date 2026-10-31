@@ -16,6 +16,9 @@ public class PurchaseRequestLineDto
     /// </summary>
     public Guid Id { get; set; }
 
+    /// <summary>第二轮主数据：来源物料档案 Id（可空；旧数据/手工录入为 null）。</summary>
+    public Guid? MaterialId { get; set; }
+
     [Required, StringLength(100)]
     public string ItemName { get; set; } = string.Empty;
 
@@ -37,6 +40,9 @@ public class PurchaseRequestLineDto
 /// </summary>
 public class CreatePurchaseRequestLineDto
 {
+    /// <summary>第二轮主数据：选中物料档案后由服务端按档案快照名称/规格；为空则按手工文本录入。</summary>
+    public Guid? MaterialId { get; set; }
+
     [Required, StringLength(100)]
     public string ItemName { get; set; } = string.Empty;
 
@@ -57,6 +63,9 @@ public class CreatePurchaseRequestLineDto
 public class UpdatePurchaseRequestLineDto
 {
     public Guid? Id { get; set; }
+
+    /// <summary>第二轮主数据：物料档案 Id；为空表示沿用手工录入的旧口径。</summary>
+    public Guid? MaterialId { get; set; }
 
     [Required, StringLength(100)]
     public string ItemName { get; set; } = string.Empty;
@@ -116,6 +125,12 @@ public class AddSupplierQuoteDto
 {
     [Required, StringLength(100)]
     public string SupplierName { get; set; } = string.Empty;
+
+    /// <summary>
+    /// 第二轮主数据：关联的供应商档案 Id。有值时服务端用档案名称覆盖 SupplierName 作为快照；
+    /// 为空则沿用原来的自由文本报价（兼容旧数据）。
+    /// </summary>
+    public Guid? SupplierId { get; set; }
 
     [Range(0, 3650)]
     public int DeliveryDays { get; set; }
@@ -212,6 +227,10 @@ public class PurchaseDashboardDto
 public class SupplierQuoteDto
 {
     public Guid Id { get; set; }
+
+    /// <summary>第二轮主数据：关联供应商档案 Id（可空；旧报价为 null）。</summary>
+    public Guid? SupplierId { get; set; }
+
     public string SupplierName { get; set; } = string.Empty;
     public decimal Amount { get; set; }
     public int DeliveryDays { get; set; }
@@ -294,6 +313,10 @@ public class PurchaseOrderDto
     public Guid Id { get; set; }
     public string OrderNumber { get; set; } = string.Empty;
     public Guid PurchaseRequestId { get; set; }
+
+    /// <summary>第二轮主数据：订单来源供应商档案 Id（快照自选中报价，可空）。</summary>
+    public Guid? SupplierId { get; set; }
+
     public string SupplierName { get; set; } = string.Empty;
     public decimal Amount { get; set; }
     public int DeliveryDays { get; set; }

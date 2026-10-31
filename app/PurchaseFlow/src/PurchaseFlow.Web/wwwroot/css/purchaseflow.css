@@ -46,3 +46,7 @@
 .pf-quote-input-table{margin-top:4px}
 .pf-quote-input-table td{padding:9px 8px}
 @media(max-width:767px){.pf-quote-detail-row>td{padding:2px 0 12px!important}.pf-quote-detail-table{border:0}}
+/* 第二轮第 1 批：物料档案下拉与“正在编辑”行高亮。档案下拉放在物料单元格内，
+   不额外占表格列，移动端布局沿用现有 pf-line-table 规则。 */
+.pf-line-material{margin-bottom:5px;font-size:11px;padding-top:3px;padding-bottom:3px}
+.pf-row-editing{background:#f6faf8}

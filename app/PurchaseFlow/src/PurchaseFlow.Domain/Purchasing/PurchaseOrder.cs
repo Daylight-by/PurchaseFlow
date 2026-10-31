@@ -17,6 +17,13 @@ public class PurchaseOrder : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public Guid? TenantId { get; private set; }
     public string OrderNumber { get; private set; } = string.Empty;
     public Guid PurchaseRequestId { get; private set; }
+
+    /// <summary>
+    /// 第二轮主数据：订单来源供应商档案 Id（快照自选中报价，可空）。
+    /// SupplierName 仍是名称快照，档案改名不影响历史订单；刻意不建外键。
+    /// </summary>
+    public Guid? SupplierId { get; private set; }
+
     public string SupplierName { get; private set; } = string.Empty;
     public decimal Amount { get; private set; }
     public int DeliveryDays { get; private set; }
@@ -34,7 +41,8 @@ public class PurchaseOrder : FullAuditedAggregateRoot<Guid>, IMultiTenant
         Guid purchaseRequestId,
         string supplierName,
         decimal amount,
-        int deliveryDays)
+        int deliveryDays,
+        Guid? supplierId = null)
         : base(id)
     {
         TenantId = tenantId;
@@ -43,6 +51,8 @@ public class PurchaseOrder : FullAuditedAggregateRoot<Guid>, IMultiTenant
         // 因此单号上限扩到 128，OrderReference 上限维持 64 不变。
         OrderNumber = Check.NotNullOrWhiteSpace(orderNumber, nameof(orderNumber), maxLength: 128).Trim();
         PurchaseRequestId = purchaseRequestId;
+        // 第二轮主数据：supplierId 放最后且可选，旧调用（不关联档案）不用改。
+        SupplierId = supplierId;
         SupplierName = Check.NotNullOrWhiteSpace(supplierName, nameof(supplierName), maxLength: 100).Trim();
         // amount 参数保留：历史/迁移数据物化时仍需能带入既有金额做兼容。
         // 新订单的金额以明细合计为准，任何 AddLine 都会调用

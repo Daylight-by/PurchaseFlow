@@ -22,6 +22,8 @@ public class DetailsModel : PurchaseFlowPageModel
 {
     private readonly IPurchaseRequestAppService _service;
     private readonly IGoodsReceiptAppService _receiptService;
+    private readonly IMaterialAppService _materialService;
+    private readonly ISupplierAppService _supplierService;
     private readonly IAuthorizationService _authorization;
     private readonly ICurrentUser _currentUser;
     private readonly IStringLocalizer<PurchaseFlowResource> _localizer;
@@ -33,6 +35,18 @@ public class DetailsModel : PurchaseFlowPageModel
     public bool CanViewReceipts { get; private set; }
     public bool CanRegisterReceipts { get; private set; }
     public string? Error { get; private set; }
+
+    /// <summary>
+    /// 第二轮第 1 批：行编辑器的「物料档案」下拉选项（只取启用中的档案）。
+    /// 详情页编辑需求时同样允许选择档案，未选则沿用旧的手工文本。
+    /// </summary>
+    public List<MaterialDto> Materials { get; private set; } = new();
+
+    /// <summary>
+    /// 第二轮第 1 批：报价表单的「选择供应商档案」下拉选项（只取启用中的供应商）。
+    /// 只用于选择与提示，不在表单提交时回写名称快照 —— 名称覆盖由服务端完成。
+    /// </summary>
+    public List<SupplierDto> Suppliers { get; private set; } = new();
 
     [BindProperty]
     public string OrderReference { get; set; } = string.Empty;
@@ -65,11 +79,15 @@ public class DetailsModel : PurchaseFlowPageModel
     [BindProperty]
     public List<ReceiptLineInput> ReceiptLines { get; set; } = new();
 
-    public DetailsModel(IPurchaseRequestAppService service, IGoodsReceiptAppService receiptService, IAuthorizationService authorization,
+    public DetailsModel(IPurchaseRequestAppService service, IGoodsReceiptAppService receiptService,
+        IMaterialAppService materialService, ISupplierAppService supplierService,
+        IAuthorizationService authorization,
         ICurrentUser currentUser, IStringLocalizer<PurchaseFlowResource> localizer)
     {
         _service = service;
         _receiptService = receiptService;
+        _materialService = materialService;
+        _supplierService = supplierService;
         _authorization = authorization;
         _currentUser = currentUser;
         _localizer = localizer;
@@ -87,6 +105,8 @@ public class DetailsModel : PurchaseFlowPageModel
             {
                 // P1-3：把已落库的行 Id 带到页面，编辑保存时再回传，应用层才能按 Id 就地更新。
                 Id = line.Id,
+                // 第二轮第 1 批：回显物料档案关联，编辑时下拉保持选中。
+                MaterialId = line.MaterialId,
                 ItemName = line.ItemName,
                 Specification = line.Specification,
                 Quantity = line.Quantity,
@@ -119,6 +139,8 @@ public class DetailsModel : PurchaseFlowPageModel
                 .Select(line => new UpdatePurchaseRequestLineDto
                 {
                     Id = line.Id,
+                    // 第二轮第 1 批：带上可选的物料档案 Id；空 Id 时应用层仍按手工文本处理（向后兼容）。
+                    MaterialId = line.MaterialId,
                     ItemName = line.ItemName,
                     Specification = line.Specification,
                     Quantity = line.Quantity,
@@ -130,11 +152,14 @@ public class DetailsModel : PurchaseFlowPageModel
     /// P0-1：添加报价改为按当前采购需求明细逐项提交报价单价。
     /// 不再接收手填总额 Amount —— 报价总额由应用层/领域按每条报价明细小计汇总，
     /// 从入口保证“报价总额 = 明细合计”。
+    /// 第二轮第 1 批：supplierId 可选；有值时服务端会校验供应商档案并按档案名称覆盖文本快照。
     /// </summary>
-    public Task<IActionResult> OnPostAddQuoteAsync(Guid id, string supplierName,
+    public Task<IActionResult> OnPostAddQuoteAsync(Guid id, string supplierName, Guid? supplierId,
         int deliveryDays, string? note) => RunAsync(id, () => _service.AddQuoteAsync(id, new AddSupplierQuoteDto
         {
             SupplierName = supplierName ?? string.Empty,
+            // 第二轮第 1 批：空值表示沿用旧的手工文本供应商（向后兼容）；有值则关联档案。
+            SupplierId = supplierId,
             DeliveryDays = deliveryDays,
             Note = note,
             // P0-1：把页面逐项单价映射为报价明细输入；空行 Id 说明该输入无效，直接丢弃，
@@ -237,6 +262,14 @@ public class DetailsModel : PurchaseFlowPageModel
         receipt.IsPartiallyReceived ? "部分收货" :
         OrderStatusText(receipt.OrderStatus);
 
+    /// <summary>
+    /// 第二轮第 1 批：判断报价/订单关联的供应商档案是否仍在启用列表中。
+    /// 只用本页已加载的启用档案做对比，不额外查库；用于在报价行/订单区块显示
+    /// “已关联供应商档案”或“档案已停用”的提示。
+    /// </summary>
+    public bool IsKnownSupplier(Guid? supplierId) =>
+        supplierId.HasValue && Suppliers.Any(x => x.Id == supplierId.Value);
+
     private async Task<IActionResult> RunAsync(Guid id, Func<Task> action)
     {
         try
@@ -269,6 +302,23 @@ public class DetailsModel : PurchaseFlowPageModel
     private async Task LoadAsync(Guid id, bool preserveReceiptInputs = false)
     {
         PurchaseRequest = await _service.GetAsync(id);
+
+        // 第二轮第 1 批：加载行编辑器的物料档案选项与报价表单的供应商档案选项。
+        // 只取启用中的档案（停用档案不能用于新的明细/报价）；旧的手工录入路径保持不变。
+        // PageSize 与服务端上限 200 对齐，避免请求 500 被截断造成“选项看起来变少”的误会。
+        Materials = (await _materialService.GetListAsync(new MaterialListInput
+        {
+            IsActive = true,
+            Page = 1,
+            PageSize = 200
+        })).Items;
+        Suppliers = (await _supplierService.GetListAsync(new SupplierListInput
+        {
+            IsActive = true,
+            Page = 1,
+            PageSize = 200
+        })).Items;
+
         CanEdit = PurchaseRequest.BuyerUserId == _currentUser.Id &&
                   (PurchaseRequest.Status is PurchaseRequestStatus.Draft or PurchaseRequestStatus.Returned) &&
                   (await _authorization.AuthorizeAsync(User, PurchaseFlowPermissions.EditRequests)).Succeeded;

@@ -1,12 +1,21 @@
+@using System
+@using Microsoft.AspNetCore.Authorization
+@using PurchaseFlow.Permissions
 @using Volo.Abp.Users
 @using Volo.Abp.AspNetCore.Mvc.UI.Theme.Basic.Bundling
 @inject ICurrentUser CurrentUser
+@inject IAuthorizationService Authorization
 @{
     Layout = null;
     var path = Context.Request.Path.Value ?? "/";
     var isHome = path == "/";
     var isPurchasing = path.StartsWith("/Purchasing", StringComparison.OrdinalIgnoreCase);
+    var isSuppliers = path.StartsWith("/MasterData/Suppliers", StringComparison.OrdinalIgnoreCase);
+    var isMaterials = path.StartsWith("/MasterData/Materials", StringComparison.OrdinalIgnoreCase);
     var isGuide = path.StartsWith("/Guide", StringComparison.OrdinalIgnoreCase);
+    // 第二轮第 1 批：侧边导航也按 MasterData 权限显示档案入口。
+    // 页面本身还有 [Authorize] 兜底，这里只是避免无权限用户看到点进去 403 的链接。
+    var canViewMasterData = (await Authorization.AuthorizeAsync(User, PurchaseFlowPermissions.MasterData)).Succeeded;
     var roleName = CurrentUser.IsInRole("admin") ? "管理员" : CurrentUser.IsInRole("reviewer") ? "审核员" : CurrentUser.IsInRole("buyer") ? "采购员" : "工作台用户";
 }
 <!DOCTYPE html>
@@ -29,7 +38,13 @@
         <nav class="pf-side-links">
             <a href="/" class="@(isHome ? "active" : "")" aria-current="@(isHome ? "page" : null)"><i class="fas fa-chart-pie" aria-hidden="true"></i>业务概览<span>01</span></a>
             <a href="/Purchasing/Index" class="@(isPurchasing ? "active" : "")" aria-current="@(isPurchasing ? "page" : null)"><i class="fas fa-layer-group" aria-hidden="true"></i>采购需求<span>02</span></a>
-            <a href="/Guide" class="@(isGuide ? "active" : "")" aria-current="@(isGuide ? "page" : null)"><i class="fas fa-compass" aria-hidden="true"></i>使用指南<span>03</span></a>
+            @if (canViewMasterData)
+            {
+                @* 第二轮第 1 批：主数据入口放在采购需求之后，与 PurchaseFlowMenuContributor 的 order 2/3 对应。 *@
+                <a href="/MasterData/Suppliers" class="@(isSuppliers ? "active" : "")" aria-current="@(isSuppliers ? "page" : null)"><i class="fas fa-truck" aria-hidden="true"></i>供应商档案<span>03</span></a>
+                <a href="/MasterData/Materials" class="@(isMaterials ? "active" : "")" aria-current="@(isMaterials ? "page" : null)"><i class="fas fa-boxes-stacked" aria-hidden="true"></i>物料档案<span>04</span></a>
+            }
+            <a href="/Guide" class="@(isGuide ? "active" : "")" aria-current="@(isGuide ? "page" : null)"><i class="fas fa-compass" aria-hidden="true"></i>使用指南<span>@(canViewMasterData ? "05" : "03")</span></a>
         </nav>
         @if (CurrentUser.IsInRole("admin"))
         {

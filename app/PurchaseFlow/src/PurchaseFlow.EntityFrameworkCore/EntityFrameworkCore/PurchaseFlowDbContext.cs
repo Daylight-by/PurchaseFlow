@@ -30,6 +30,9 @@ public class PurchaseFlowDbContext :
     public DbSet<SupplierQuote> SupplierQuotes { get; set; }
     // P0-1：报价逐项明细成为独立表，与 SupplierQuote 级联删除。
     public DbSet<SupplierQuoteLine> SupplierQuoteLines { get; set; }
+    // 第二轮第 1 批：供应商/物料主数据档案。
+    public DbSet<Supplier> Suppliers { get; set; }
+    public DbSet<Material> Materials { get; set; }
     public DbSet<ReviewEvent> ReviewEvents { get; set; }
     public DbSet<PurchaseOrder> PurchaseOrders { get; set; }
     public DbSet<PurchaseOrderLine> PurchaseOrderLines { get; set; }
@@ -108,6 +111,9 @@ public class PurchaseFlowDbContext :
         {
             b.ToTable(PurchaseFlowConsts.DbTablePrefix + "PurchaseRequestLines", PurchaseFlowConsts.DbSchema);
             b.ConfigureByConvention();
+            // 第二轮主数据：MaterialId 可空、不建外键 —— 档案可停用/更名，历史明细
+            // 必须保留名称/规格快照；这里只存 Id 做溯源，约束由应用层负责。
+            b.Property(x => x.MaterialId);
             b.Property(x => x.ItemName).IsRequired().HasMaxLength(100);
             b.Property(x => x.Specification).HasMaxLength(100);
             b.Property(x => x.Quantity).HasPrecision(18, 3);
@@ -125,6 +131,9 @@ public class PurchaseFlowDbContext :
         {
             b.ToTable(PurchaseFlowConsts.DbTablePrefix + "SupplierQuotes", PurchaseFlowConsts.DbSchema);
             b.ConfigureByConvention();
+            // 第二轮主数据：SupplierId 可空、不建外键 —— SupplierName 是历史名称快照，
+            // 档案改名/停用不能影响历史报价，这里只存 Id 做溯源。
+            b.Property(x => x.SupplierId);
             b.Property(x => x.SupplierName).IsRequired().HasMaxLength(100);
             b.Property(x => x.Amount).HasPrecision(18, 2);
             b.Property(x => x.Note).HasMaxLength(500);
@@ -154,6 +163,43 @@ public class PurchaseFlowDbContext :
             b.HasIndex(x => new { x.TenantId, x.SupplierQuoteId });
         });
 
+        // 第二轮第 1 批：供应商档案。Code 是业务唯一键：
+        // (TenantId, Code) 复合唯一索引保证租户内唯一；SQLite 唯一索引允许多个 NULL，
+        // 因此 host 档案（TenantId IS NULL）另建过滤唯一索引，沿用 PurchaseRequests 的写法。
+        builder.Entity<Supplier>(b =>
+        {
+            b.ToTable(PurchaseFlowConsts.DbTablePrefix + "Suppliers", PurchaseFlowConsts.DbSchema);
+            b.ConfigureByConvention();
+            b.Property(x => x.Code).IsRequired().HasMaxLength(32);
+            b.Property(x => x.Name).IsRequired().HasMaxLength(100);
+            b.Property(x => x.ContactName).HasMaxLength(50);
+            b.Property(x => x.ContactPhone).HasMaxLength(30);
+            b.Property(x => x.Note).HasMaxLength(500);
+            b.HasIndex(x => new { x.TenantId, x.Code }).IsUnique();
+            b.HasIndex(x => x.Code)
+                .HasDatabaseName("IX_AppSuppliers_HostCode")
+                .IsUnique()
+                .HasFilter("\"TenantId\" IS NULL");
+        });
+
+        // 第二轮第 1 批：物料档案。Code 唯一索引口径与供应商一致（租户内唯一 + host 过滤唯一）。
+        builder.Entity<Material>(b =>
+        {
+            b.ToTable(PurchaseFlowConsts.DbTablePrefix + "Materials", PurchaseFlowConsts.DbSchema);
+            b.ConfigureByConvention();
+            b.Property(x => x.Code).IsRequired().HasMaxLength(32);
+            b.Property(x => x.Name).IsRequired().HasMaxLength(100);
+            b.Property(x => x.Specification).HasMaxLength(100);
+            b.Property(x => x.Unit).IsRequired().HasMaxLength(20);
+            b.Property(x => x.Category).HasMaxLength(50);
+            b.Property(x => x.Note).HasMaxLength(500);
+            b.HasIndex(x => new { x.TenantId, x.Code }).IsUnique();
+            b.HasIndex(x => x.Code)
+                .HasDatabaseName("IX_AppMaterials_HostCode")
+                .IsUnique()
+                .HasFilter("\"TenantId\" IS NULL");
+        });
+
         builder.Entity<ReviewEvent>(b =>
         {
             b.ToTable(PurchaseFlowConsts.DbTablePrefix + "ReviewEvents", PurchaseFlowConsts.DbSchema);
@@ -168,6 +214,8 @@ public class PurchaseFlowDbContext :
         {
             b.ToTable(PurchaseFlowConsts.DbTablePrefix + "PurchaseOrders", PurchaseFlowConsts.DbSchema);
             b.ConfigureByConvention();
+            // 第二轮主数据：SupplierId 可空、不建外键；订单保留供应商名称快照。
+            b.Property(x => x.SupplierId);
             // P1-1："PO-" + OrderReference(64) 最长 67，原 64 上限会拒绝合法单号；
             // 单号上限扩到 128，OrderReference 本身仍保持 64。
             b.Property(x => x.OrderNumber).IsRequired().HasMaxLength(128);
