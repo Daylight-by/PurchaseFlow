@@ -8,6 +8,12 @@ public static class PurchaseFlowPermissions
     public const string EditRequests = GroupName + ".Requests.Edit";
     public const string ReviewRequests = GroupName + ".Requests.Review";
 
+    /// <summary>
+    /// 第二轮第 2 批：高金额采购的二级审批权限。仅授予管理员角色，
+    /// 审核员只有一级审批权限，避免“一个人批完整个流程”。
+    /// </summary>
+    public const string ApproveHighValue = GroupName + ".Requests.ApproveHighValue";
+
     public const string ViewReceipts = GroupName + ".Receipts.View";
     public const string RegisterReceipts = GroupName + ".Receipts.Register";
 

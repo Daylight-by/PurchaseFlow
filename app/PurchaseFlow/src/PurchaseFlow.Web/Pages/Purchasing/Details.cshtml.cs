@@ -32,6 +32,17 @@ public class DetailsModel : PurchaseFlowPageModel
     public PurchaseOrderReceiptDto? PurchaseOrderReceipts { get; private set; }
     public bool CanEdit { get; private set; }
     public bool CanReview { get; private set; }
+
+    /// <summary>
+    /// 第二轮第 2 批：当前用户能否做二级批准。只有处于 PendingSecondApproval 且拥有
+    /// ApproveHighValue 权限（演示里只有管理员）时才显示二级批准按钮；
+    /// 最终“必须换人”的硬规则仍由领域层校验，页面只负责展示与提示。
+    /// </summary>
+    public bool CanSecondApprove { get; private set; }
+
+    /// <summary>退回在待审核与二级待审两个阶段都允许，因此单独用一个权限标志控制退回按钮。</summary>
+    public bool CanReturn { get; private set; }
+
     public bool CanViewReceipts { get; private set; }
     public bool CanRegisterReceipts { get; private set; }
     public string? Error { get; private set; }
@@ -188,6 +199,14 @@ public class DetailsModel : PurchaseFlowPageModel
     public Task<IActionResult> OnPostApproveAsync(Guid id, string? comment) =>
         RunAsync(id, () => _service.ApproveAsync(id, new ReviewPurchaseRequestDto { Comment = comment }));
 
+    /// <summary>
+    /// 第二轮第 2 批：二级审批。高金额需求一级批准后进入 PendingSecondApproval，
+    /// 由另一位具备 ApproveHighValue 权限的管理员在这里最终批准并生成订单。
+    /// 页面不做换人判断，交由领域层抛 SecondApprovalRequiresDifferentUser，避免 UI 绕过业务硬规则。
+    /// </summary>
+    public Task<IActionResult> OnPostApproveSecondLevelAsync(Guid id, string? comment) =>
+        RunAsync(id, () => _service.ApproveSecondLevelAsync(id, new ReviewPurchaseRequestDto { Comment = comment }));
+
     public async Task<IActionResult> OnPostReceiveAsync(Guid id)
     {
         try
@@ -244,6 +263,9 @@ public class DetailsModel : PurchaseFlowPageModel
     {
         "Submitted" => "提交审核",
         "Approved" => "批准",
+        // 第二轮第 2 批：分级审批在时间线上分别显示一级/二级，便于审计“谁批的哪一级”。
+        "ApprovedLevel1" => "一级批准",
+        "ApprovedSecondLevel" => "二级批准",
         "Returned" => "退回",
         _ => action
     };
@@ -323,6 +345,13 @@ public class DetailsModel : PurchaseFlowPageModel
                   (PurchaseRequest.Status is PurchaseRequestStatus.Draft or PurchaseRequestStatus.Returned) &&
                   (await _authorization.AuthorizeAsync(User, PurchaseFlowPermissions.EditRequests)).Succeeded;
         CanReview = PurchaseRequest.Status == PurchaseRequestStatus.PendingReview &&
+                    (await _authorization.AuthorizeAsync(User, PurchaseFlowPermissions.ReviewRequests)).Succeeded;
+        // 第二轮第 2 批：二级审批按钮只在“二级待审 + 有 ApproveHighValue 权限”时显示；
+        // 是否换人由领域层最终校验，页面只提示“必须换人”。
+        CanSecondApprove = PurchaseRequest.Status == PurchaseRequestStatus.PendingSecondApproval &&
+                           (await _authorization.AuthorizeAsync(User, PurchaseFlowPermissions.ApproveHighValue)).Succeeded;
+        // 退回在待审核与二级待审都允许，因此用独立标志控制退回按钮，避免二级待审页缺少退回入口。
+        CanReturn = (PurchaseRequest.Status is PurchaseRequestStatus.PendingReview or PurchaseRequestStatus.PendingSecondApproval) &&
                     (await _authorization.AuthorizeAsync(User, PurchaseFlowPermissions.ReviewRequests)).Succeeded;
         CanViewReceipts = (await _authorization.AuthorizeAsync(User, PurchaseFlowPermissions.ViewReceipts)).Succeeded;
         CanRegisterReceipts = CanViewReceipts &&

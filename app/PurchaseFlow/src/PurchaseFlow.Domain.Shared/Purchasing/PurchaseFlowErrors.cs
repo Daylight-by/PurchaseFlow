@@ -28,6 +28,9 @@ public static class PurchaseFlowErrors
     public const string InvalidMaterialCode = "PurchaseFlow:InvalidMaterialCode";
     public const string DuplicateMaterialCode = "PurchaseFlow:DuplicateMaterialCode";
     public const string MaterialInactive = "PurchaseFlow:MaterialInactive";
+
+    // 第二轮第 2 批（分级审批）：二级审批必须换人，避免同一个人绕过两级控制。
+    public const string SecondApprovalRequiresDifferentUser = "PurchaseFlow:SecondApprovalRequiresDifferentUser";
     public const string InvalidReceiptDate = "PurchaseFlow:InvalidReceiptDate";
     public const string InvalidReceiptKey = "PurchaseFlow:InvalidReceiptKey";
     public const string InvalidReceiptLines = "PurchaseFlow:InvalidReceiptLines";

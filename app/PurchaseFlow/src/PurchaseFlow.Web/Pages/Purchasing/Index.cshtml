@@ -25,6 +25,8 @@
         <a class="@(Model.Filter.Status is null ? "active" : "")" asp-page="/Purchasing/Index"><span>全部需求</span><strong>@Model.Result.AllCount</strong></a>
         <a class="@(Model.Filter.Status == PurchaseRequestStatus.Draft ? "active" : "")" asp-page="/Purchasing/Index" asp-route-status="Draft"><span><i class="pf-stage-dot pf-stage-draft"></i>草稿</span><strong>@Model.Result.DraftCount</strong></a>
         <a class="@(Model.Filter.Status == PurchaseRequestStatus.PendingReview ? "active" : "")" asp-page="/Purchasing/Index" asp-route-status="PendingReview"><span><i class="pf-stage-dot pf-stage-pendingreview"></i>待审核</span><strong>@Model.Result.PendingReviewCount</strong></a>
+        @* 第二轮第 2 批：二级待审单独入口。高金额需求一级批准后停在这里，等待另一位管理员批准。 *@
+        <a class="@(Model.Filter.Status == PurchaseRequestStatus.PendingSecondApproval ? "active" : "")" asp-page="/Purchasing/Index" asp-route-status="PendingSecondApproval"><span><i class="pf-stage-dot pf-stage-pendingsecondapproval"></i>二级待审</span><strong>@Model.Result.PendingSecondApprovalCount</strong></a>
         <a class="@(Model.Filter.Status == PurchaseRequestStatus.Returned ? "active" : "")" asp-page="/Purchasing/Index" asp-route-status="Returned"><span><i class="pf-stage-dot pf-stage-returned"></i>已退回</span><strong>@Model.Result.ReturnedCount</strong></a>
         <a class="@(Model.Filter.Status == PurchaseRequestStatus.Approved ? "active" : "")" asp-page="/Purchasing/Index" asp-route-status="Approved"><span><i class="pf-stage-dot pf-stage-approved"></i>已批准</span><strong>@Model.Result.ApprovedCount</strong></a>
     </div>
@@ -53,6 +55,8 @@
             <a asp-page="/Purchasing/Index" asp-route-keyword="@Model.Filter.Keyword" class="@(Model.Filter.Status is null ? "active" : "")">全部</a>
             <a asp-page="/Purchasing/Index" asp-route-status="Draft" asp-route-keyword="@Model.Filter.Keyword" class="@(Model.Filter.Status == PurchaseRequestStatus.Draft ? "active" : "")">草稿</a>
             <a asp-page="/Purchasing/Index" asp-route-status="PendingReview" asp-route-keyword="@Model.Filter.Keyword" class="@(Model.Filter.Status == PurchaseRequestStatus.PendingReview ? "active" : "")">待审核</a>
+            @* 第二轮第 2 批：二级待审批量入口，带上当前关键字筛选。 *@
+            <a asp-page="/Purchasing/Index" asp-route-status="PendingSecondApproval" asp-route-keyword="@Model.Filter.Keyword" class="@(Model.Filter.Status == PurchaseRequestStatus.PendingSecondApproval ? "active" : "")">二级待审 · @Model.Result.PendingSecondApprovalCount</a>
             <a asp-page="/Purchasing/Index" asp-route-status="Returned" asp-route-keyword="@Model.Filter.Keyword" class="@(Model.Filter.Status == PurchaseRequestStatus.Returned ? "active" : "")">已退回 · @Model.Result.ReturnedCount</a>
             <a asp-page="/Purchasing/Index" asp-route-status="Approved" asp-route-keyword="@Model.Filter.Keyword" class="@(Model.Filter.Status == PurchaseRequestStatus.Approved ? "active" : "")">已批准</a>
         </div>
@@ -65,7 +69,7 @@
                     <tr>
                         <td data-label="销售单号"><strong>@item.OrderReference</strong><span class="pf-row-subtitle">@item.Description</span></td>
                         <td data-label="预计销售金额" class="pf-money">¥@item.SaleAmount.ToString("N2")</td>
-                        <td data-label="采购明细汇总" class="pf-money">¥@item.Amount.ToString("N2")<span class="pf-row-subtitle">@item.LineCount 条明细</span></td>
+                        <td data-label="采购明细汇总" class="pf-money">¥@item.Amount.ToString("N2")<span class="pf-row-subtitle">@item.LineCount 条明细@(item.RequiresSecondApproval ? " · 需两级审批" : "")</span></td>
                         <td data-label="状态"><span class="pf-status pf-status-@item.Status.ToString().ToLowerInvariant()">@PurchaseFlow.Web.Pages.Purchasing.IndexModel.StatusText(item.Status)</span></td>
                         <td data-label="创建时间" class="pf-muted">@item.CreationTime.ToString("yyyy-MM-dd HH:mm")</td>
                         <td data-label="操作" class="text-end"><a class="pf-link" asp-page="/Purchasing/Details" asp-route-id="@item.Id">查看决策 →</a></td>

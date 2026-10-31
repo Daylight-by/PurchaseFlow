@@ -66,6 +66,8 @@ public class PurchaseRequestAppService : ApplicationService, IPurchaseRequestApp
             AllCount = counts.Sum(x => x.Count),
             DraftCount = counts.Where(x => x.Status == PurchaseRequestStatus.Draft).Sum(x => x.Count),
             PendingReviewCount = counts.Where(x => x.Status == PurchaseRequestStatus.PendingReview).Sum(x => x.Count),
+            // 第二轮第 2 批：一级已批、等待二级审批的高金额请求也要在列表页给入口。
+            PendingSecondApprovalCount = counts.Where(x => x.Status == PurchaseRequestStatus.PendingSecondApproval).Sum(x => x.Count),
             ReturnedCount = counts.Where(x => x.Status == PurchaseRequestStatus.Returned).Sum(x => x.Count),
             ApprovedCount = counts.Where(x => x.Status == PurchaseRequestStatus.Approved).Sum(x => x.Count),
             PageSize = Math.Clamp(input.PageSize, 1, 50)
@@ -100,6 +102,8 @@ public class PurchaseRequestAppService : ApplicationService, IPurchaseRequestApp
             TotalCount = counts.Sum(x => x.Count),
             DraftCount = counts.Where(x => x.Status == PurchaseRequestStatus.Draft).Sum(x => x.Count),
             PendingReviewCount = counts.Where(x => x.Status == PurchaseRequestStatus.PendingReview).Sum(x => x.Count),
+            // 第二轮第 2 批：Dashboard 展示“等待二级审批”数量（高金额待办）。
+            PendingSecondApprovalCount = counts.Where(x => x.Status == PurchaseRequestStatus.PendingSecondApproval).Sum(x => x.Count),
             ReturnedCount = counts.Where(x => x.Status == PurchaseRequestStatus.Returned).Sum(x => x.Count),
             ApprovedCount = counts.Where(x => x.Status == PurchaseRequestStatus.Approved).Sum(x => x.Count)
         };
@@ -199,10 +203,16 @@ public class PurchaseRequestAppService : ApplicationService, IPurchaseRequestApp
             Amount = summary.Amount,
             LineCount = summary.LineCount,
             Status = summary.Status,
+            // 第二轮第 2 批：详情 DTO 是逐字段从 summary 拷贝出来的，
+            // 继承自摘要的 RequiresSecondApproval 也必须显式带过来，
+            // 否则详情页永远显示“无需两级审批”。
+            RequiresSecondApproval = summary.RequiresSecondApproval,
             BuyerUserId = summary.BuyerUserId,
             SelectedQuoteId = summary.SelectedQuoteId,
             SelectionReason = summary.SelectionReason,
             CreationTime = summary.CreationTime,
+            // 第二轮第 2 批：一级审批人用于页面展示“一级已由 X 批准”与换人规则提示。
+            FirstApproverUserId = request.FirstApproverUserId,
             SelectedQuoteAmount = selected?.Amount,
             ExpectedGrossProfit = selected is null ? null : request.SaleAmount - selected.Amount,
             SelectedCostPremiumToLowest = selected is null || cheapest is null
@@ -322,13 +332,41 @@ public class PurchaseRequestAppService : ApplicationService, IPurchaseRequestApp
         await AddEventAsync(id, "Submitted", request.SelectionReason);
     }
 
+    /// <summary>
+    /// 第二轮第 2 批：一级审批。低金额（≤ 阈值）一级批准即最终通过并生成订单
+    /// （保持线上既有行为不变）；高金额（> 阈值）一级批准只进入二级待审，
+    /// 必须由另一位具备二级权限的人再批准一次，因此这里不生成订单，
+    /// 只记录 ApprovedLevel1 事件（页面时间线据此显示“一级批准”）。
+    /// </summary>
     [Authorize(PurchaseFlowPermissions.ReviewRequests)]
     public async Task ApproveAsync(Guid id, ReviewPurchaseRequestDto input)
     {
         var request = await GetRequestAsync(id);
-        request.Approve();
+        request.ApproveFirstLevel(UserId());
         await _requests.UpdateAsync(request);
+
+        if (request.Status == PurchaseRequestStatus.PendingSecondApproval)
+        {
+            await AddEventAsync(id, "ApprovedLevel1", input.Comment);
+            return;
+        }
+
         await AddEventAsync(id, "Approved", input.Comment);
+        await CreatePurchaseOrderAsync(request);
+    }
+
+    /// <summary>
+    /// 第二轮第 2 批：二级审批。仅高金额请求、仅 PendingSecondApproval 状态可调用；
+    /// 与一级审批人相同会被领域拒绝（SecondApprovalRequiresDifferentUser），
+    /// 越级/重复调用报 InvalidStatus。二级批准后才算最终 Approved 并生成采购订单。
+    /// </summary>
+    [Authorize(PurchaseFlowPermissions.ApproveHighValue)]
+    public async Task ApproveSecondLevelAsync(Guid id, ReviewPurchaseRequestDto input)
+    {
+        var request = await GetRequestAsync(id);
+        request.ApproveSecondLevel(UserId());
+        await _requests.UpdateAsync(request);
+        await AddEventAsync(id, "ApprovedSecondLevel", input.Comment);
         await CreatePurchaseOrderAsync(request);
     }
 
@@ -558,6 +596,8 @@ public class PurchaseRequestAppService : ApplicationService, IPurchaseRequestApp
             Amount = total.Amount,
             LineCount = total.Count,
             Status = request.Status,
+            // 第二轮第 2 批：列表/详情共用摘要，需要把“是否需两级审批”带给页面。
+            RequiresSecondApproval = request.RequiresSecondApproval,
             BuyerUserId = request.BuyerUserId,
             SelectedQuoteId = request.SelectedQuoteId,
             SelectionReason = request.SelectionReason,

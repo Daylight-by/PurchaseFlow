@@ -96,6 +96,9 @@ public class PurchaseFlowDbContext :
             b.Property(x => x.Description).IsRequired().HasMaxLength(500);
             b.Property(x => x.SaleAmount).HasPrecision(18, 2);
             b.Property(x => x.SelectionReason).HasMaxLength(500);
+            // 第二轮第 2 批：一级审批人（可空 Guid，运营/审计字段，无外键）。
+            // 用于二级审批“必须换人”的规则校验与页面展示；历史/草稿请求为空。
+            b.Property(x => x.FirstApproverUserId);
             // The purchase amount is derived from the lines, it is never stored.
             b.Ignore(x => x.Amount);
             b.HasIndex(x => new { x.TenantId, x.OrderReference }).IsUnique();

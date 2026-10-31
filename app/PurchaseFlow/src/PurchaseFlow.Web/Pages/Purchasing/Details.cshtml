@@ -29,6 +29,11 @@
             <div class="pf-detail-meta">
                 <span>销售金额 <strong>¥@Model.PurchaseRequest.SaleAmount.ToString("N2")</strong></span>
                 <span>采购明细汇总 <strong>¥@Model.PurchaseRequest.Amount.ToString("N2")</strong> · @Model.PurchaseRequest.LineCount 条明细</span>
+                @* 第二轮第 2 批：头部直接提示该需求是否走两级审批，避免审核员到审批面板才发现规则不同。 *@
+                @if (Model.PurchaseRequest.RequiresSecondApproval)
+                {
+                    <span>审批层级 <strong>需两级审批（采购金额 &gt; ¥50,000）</strong></span>
+                }
                 <span>创建于 @Model.PurchaseRequest.CreationTime.ToString("yyyy-MM-dd HH:mm")</span>
             </div>
         </div>
@@ -50,13 +55,32 @@
         </div>
         <ol class="pf-progress" aria-label="采购审批流程">
             <li class="@(Model.PurchaseRequest.Status is PurchaseRequestStatus.Draft or PurchaseRequestStatus.Returned ? "pf-progress-current" : "pf-progress-done")"><span class="pf-progress-index">1</span><strong>草稿</strong><small>建立需求与报价</small></li>
-            <li class="@(Model.PurchaseRequest.Status == PurchaseRequestStatus.PendingReview ? "pf-progress-current" : Model.PurchaseRequest.Status == PurchaseRequestStatus.Approved ? "pf-progress-done" : "")"><span class="pf-progress-index">2</span><strong>待审核</strong><small>提交决策依据</small></li>
-            <li class="@(Model.PurchaseRequest.Status == PurchaseRequestStatus.Approved ? "pf-progress-current pf-progress-done" : "")"><span class="pf-progress-index">3</span><strong>已批准</strong><small>方案进入已批准状态</small></li>
+            @* 第二轮第 2 批：高金额需求多一道二级审批，因此第 2/3 步文案按金额切换；
+               低金额需求保持原来的“待审核 → 已批准”单级流程，视觉与行为不变。 *@
+            @{
+                var flowStatus = Model.PurchaseRequest.Status;
+                var flowHighValue = Model.PurchaseRequest.RequiresSecondApproval;
+                var firstLevelDone = flowStatus is PurchaseRequestStatus.PendingSecondApproval or PurchaseRequestStatus.Approved;
+                var secondLevelDone = flowStatus == PurchaseRequestStatus.Approved;
+            }
+            <li class="@(flowStatus == PurchaseRequestStatus.PendingReview ? "pf-progress-current" : firstLevelDone ? "pf-progress-done" : "")"><span class="pf-progress-index">2</span><strong>@(flowHighValue ? "一级审核" : "待审核")</strong><small>@(flowHighValue ? "审核员一级批准" : "提交决策依据")</small></li>
+            @if (flowHighValue)
+            {
+                <li class="@(flowStatus == PurchaseRequestStatus.PendingSecondApproval ? "pf-progress-current" : secondLevelDone ? "pf-progress-done" : "")"><span class="pf-progress-index">3</span><strong>二级审批</strong><small>另一位管理员复核</small></li>
+            }
+            else
+            {
+                <li class="@(flowStatus == PurchaseRequestStatus.Approved ? "pf-progress-current pf-progress-done" : "")"><span class="pf-progress-index">3</span><strong>已批准</strong><small>方案进入已批准状态</small></li>
+            }
             <li class="@(Model.PurchaseRequest.PurchaseOrder is not null ? "pf-progress-current pf-progress-done" : "")"><span class="pf-progress-index">4</span><strong>已下采购单</strong><small>按已选报价生成订单</small></li>
         </ol>
         @if (Model.PurchaseRequest.Status == PurchaseRequestStatus.Returned)
         {
             <p class="pf-progress-note">已退回，补充后重新提交</p>
+        }
+        @if (Model.PurchaseRequest.Status == PurchaseRequestStatus.PendingSecondApproval)
+        {
+            <p class="pf-progress-note">一级已批准，等待另一位管理员二级批准；一级审批人不能再做二级审批。</p>
         }
     </section>
 
@@ -108,6 +132,12 @@
             <div class="pf-metric @(Model.PurchaseRequest.ExpectedGrossProfit < 0 ? "pf-metric-negative" : "pf-metric-accent")"><span>预计毛利</span><strong>@(Model.PurchaseRequest.ExpectedGrossProfit.HasValue ? "¥" + Model.PurchaseRequest.ExpectedGrossProfit.Value.ToString("N2") : "待计算")</strong><small>当前选择的方案</small></div>
             <div class="pf-metric @(selectedMargin < 0 ? "pf-metric-negative" : "")"><span>预计毛利率</span><strong>@(selectedMargin.HasValue ? selectedMargin.Value.ToString("N2") + "%" : "待计算")</strong><small>预计毛利 ÷ 销售金额</small></div>
         </div>
+
+        @if (Model.PurchaseRequest.RequiresSecondApproval)
+        {
+            @* 第二轮第 2 批：决策概览里再强调一次两级审批口径，避免与“已批准”语义混淆。 *@
+            <p class="pf-progress-note mb-0 mt-3">需两级审批：采购明细汇总 ¥@Model.PurchaseRequest.Amount.ToString("N2") 超过 ¥50,000，一级批准后还需另一位管理员二级批准，采购订单在二级批准后生成。</p>
+        }
 
         @if (selectedQuote is not null)
         {
@@ -537,8 +567,49 @@
     {
         <section class="pf-panel mb-4" aria-labelledby="review-title">
             <div class="pf-panel-heading"><div><span class="pf-section-kicker">REVIEW</span><h2 id="review-title">审核决策</h2></div><span class="pf-hint">核对报价、交期、选价理由和预计毛利</span></div>
-            <form method="post" asp-page-handler="Approve" asp-route-id="@Model.PurchaseRequest.Id" class="row g-2 mb-3"><div class="col-md-9"><input class="form-control" name="comment" aria-label="批准意见" placeholder="批准意见（可选）" maxlength="500" /></div><div class="col-md-3"><button class="btn btn-success w-100" type="submit">批准需求</button></div></form>
+            @if (Model.PurchaseRequest.RequiresSecondApproval)
+            {
+                @* 第二轮第 2 批：高金额需求的一级批准不会直接生成订单，按钮文案必须明确是“一级”。 *@
+                <p class="pf-progress-note mb-3">本需求采购金额 ¥@Model.PurchaseRequest.Amount.ToString("N2") 超过 ¥50,000：这里只做一级批准，之后进入二级待审，需另一位管理员批准后才生成采购订单。</p>
+            }
+            <form method="post" asp-page-handler="Approve" asp-route-id="@Model.PurchaseRequest.Id" class="row g-2 mb-3"><div class="col-md-9"><input class="form-control" name="comment" aria-label="批准意见" placeholder="批准意见（可选）" maxlength="500" /></div><div class="col-md-3"><button class="btn btn-success w-100" type="submit">@(Model.PurchaseRequest.RequiresSecondApproval ? "一级批准" : "批准需求")</button></div></form>
             <form method="post" asp-page-handler="Return" asp-route-id="@Model.PurchaseRequest.Id" class="row g-2"><div class="col-md-9"><input class="form-control" name="comment" aria-label="退回原因" placeholder="退回原因（必填）" maxlength="500" required /></div><div class="col-md-3"><button class="btn btn-outline-danger w-100" type="submit">退回修改</button></div></form>
+        </section>
+    }
+
+    @if (Model.PurchaseRequest.Status == PurchaseRequestStatus.PendingSecondApproval)
+    {
+        var firstApprovalEvent = Model.PurchaseRequest.History.LastOrDefault(x => x.Action == "ApprovedLevel1");
+        <section class="pf-panel mb-4" aria-labelledby="second-approval-title">
+            <div class="pf-panel-heading">
+                <div><span class="pf-section-kicker">SECOND APPROVAL</span><h2 id="second-approval-title">二级审批</h2></div>
+                <span class="pf-status pf-status-pendingsecondapproval">二级待审</span>
+            </div>
+            @if (firstApprovalEvent is not null)
+            {
+                <p class="pf-muted mb-1">一级审批人：@firstApprovalEvent.ActorName · @firstApprovalEvent.OccurredAtUtc.ToLocalTime().ToString("MM-dd HH:mm")</p>
+            }
+            else
+            {
+                <p class="pf-muted mb-1">一级审批已完成（历史记录未包含操作人信息）。</p>
+            }
+            <p class="pf-progress-note">必须由另一位具备二级审批权限的管理员批准；同一人不能既做一级又做二级（领域层强制校验）。</p>
+            @if (Model.CanSecondApprove)
+            {
+                <form method="post" asp-page-handler="ApproveSecondLevel" asp-route-id="@Model.PurchaseRequest.Id" class="row g-2 mb-3">
+                    <div class="col-md-9"><input class="form-control" name="comment" aria-label="二级批准意见" placeholder="二级批准意见（可选）" maxlength="500" /></div>
+                    <div class="col-md-3"><button class="btn btn-success w-100" type="submit">二级批准</button></div>
+                </form>
+            }
+            else
+            {
+                @* 第二轮第 2 批：无二级权限（如审核员）只显示等待提示，不渲染任何可点击的批准入口。 *@
+                <div class="pf-empty-state pf-empty-state-compact"><strong>等待管理员二级审批</strong><span>一级已由 @(firstApprovalEvent?.ActorName ?? "审核员") 批准；需要另一位具备二级审批权限的管理员复核。</span></div>
+            }
+            @if (Model.CanReturn)
+            {
+                <form method="post" asp-page-handler="Return" asp-route-id="@Model.PurchaseRequest.Id" class="row g-2 mt-3"><div class="col-md-9"><input class="form-control" name="comment" aria-label="退回原因" placeholder="退回原因（必填）" maxlength="500" required /></div><div class="col-md-3"><button class="btn btn-outline-danger w-100" type="submit">退回修改</button></div></form>
+            }
         </section>
     }
 

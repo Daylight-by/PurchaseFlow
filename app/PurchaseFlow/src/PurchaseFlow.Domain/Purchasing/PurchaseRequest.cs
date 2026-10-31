@@ -31,6 +31,13 @@ public class PurchaseRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
     public Guid? SelectedQuoteId { get; private set; }
     public string? SelectionReason { get; private set; }
 
+    /// <summary>
+    /// 第二轮第 2 批：一级审批人。高金额请求进入二级待审后，二级审批必须换人
+    /// （不能由同一人既批一级又批二级），所以这里要持久化一级审批人用于规则校验
+    /// 与页面展示。退回/重新提交时会清空，保证新一轮审批重新计人。
+    /// </summary>
+    public Guid? FirstApproverUserId { get; private set; }
+
     /// <summary>Purchase lines; the amount of the request is derived from them.</summary>
     public ICollection<PurchaseRequestLine> Lines { get; private set; } = new List<PurchaseRequestLine>();
 
@@ -42,6 +49,13 @@ public class PurchaseRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
     /// by hand, so the request total can not drift away from its lines.
     /// </summary>
     public decimal Amount => Lines.Sum(x => x.Subtotal);
+
+    /// <summary>
+    /// 第二轮第 2 批：采购金额超过阈值（默认 5 万）时需两级审批。
+    /// 阈值来自领域常量，保证领域规则与服务端判定只有一个口径；
+    /// 金额本身仍由明细合计派生，所以改明细会自然改变审批级别（草稿期才允许改）。
+    /// </summary>
+    public bool RequiresSecondApproval => Amount > PurchaseFlowConsts.HighValueApprovalThreshold;
 
     protected PurchaseRequest() { }
 
@@ -278,23 +292,52 @@ public class PurchaseRequest : FullAuditedAggregateRoot<Guid>, IMultiTenant
         if (string.IsNullOrWhiteSpace(SelectionReason))
             throw new BusinessException(PurchaseFlowErrors.NeedSelectionReason);
         Status = PurchaseRequestStatus.PendingReview;
+        // 第二轮第 2 批：重新提交等于开启新一轮审批，必须清空上一轮的一级审批人，
+        // 否则“退回→改金额→重新提交”后可能错误地沿用旧审批人、或换人规则被旧值干扰。
+        FirstApproverUserId = null;
     }
 
-    public void Approve()
+    /// <summary>
+    /// 第二轮第 2 批：一级审批（普通审核员）。
+    /// 低金额（≤ 阈值）直接 Approved；高金额只进入 PendingSecondApproval，
+    /// 必须等另一位有二级权限的人批准后才算最终通过并生成订单。
+    /// </summary>
+    public void ApproveFirstLevel(Guid approverUserId)
     {
-        EnsurePendingReview();
+        EnsureStatus(PurchaseRequestStatus.PendingReview); // 非待审 → InvalidStatus
+        FirstApproverUserId = approverUserId;
+        Status = RequiresSecondApproval
+            ? PurchaseRequestStatus.PendingSecondApproval
+            : PurchaseRequestStatus.Approved;
+    }
+
+    /// <summary>
+    /// 第二轮第 2 批：二级审批（仅高金额、仅 PendingSecondApproval）。
+    /// 越级/重复调用直接 InvalidStatus；同一人不能既做一级又做二级（业务硬规则）。
+    /// </summary>
+    public void ApproveSecondLevel(Guid approverUserId)
+    {
+        EnsureStatus(PurchaseRequestStatus.PendingSecondApproval); // 越级/重复 → InvalidStatus
+        if (FirstApproverUserId == approverUserId)
+            throw new BusinessException(PurchaseFlowErrors.SecondApprovalRequiresDifferentUser);
         Status = PurchaseRequestStatus.Approved;
     }
 
+    /// <summary>
+    /// 退回。第二轮第 2 批：一级待审与二级待审都允许退回（高金额请求一级批准后
+    /// 也可能被二级审批人退回）；退回后清空一级审批人，重新提交后重新走两级流程。
+    /// </summary>
     public void Return()
     {
-        EnsurePendingReview();
+        if (Status is not (PurchaseRequestStatus.PendingReview or PurchaseRequestStatus.PendingSecondApproval))
+            throw new BusinessException(PurchaseFlowErrors.InvalidStatus);
         Status = PurchaseRequestStatus.Returned;
+        FirstApproverUserId = null;
     }
 
-    private void EnsurePendingReview()
+    private void EnsureStatus(PurchaseRequestStatus expectedStatus)
     {
-        if (Status != PurchaseRequestStatus.PendingReview)
+        if (Status != expectedStatus)
             throw new BusinessException(PurchaseFlowErrors.InvalidStatus);
     }
 }

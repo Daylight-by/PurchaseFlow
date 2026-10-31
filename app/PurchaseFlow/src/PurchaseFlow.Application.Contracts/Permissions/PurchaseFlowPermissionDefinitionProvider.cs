@@ -11,7 +11,9 @@ public class PurchaseFlowPermissionDefinitionProvider : PermissionDefinitionProv
         var myGroup = context.AddGroup(PurchaseFlowPermissions.GroupName);
         var requests = myGroup.AddPermission(PurchaseFlowPermissions.Requests, L("Permission:Requests"));
         requests.AddChild(PurchaseFlowPermissions.EditRequests, L("Permission:EditRequests"));
-        requests.AddChild(PurchaseFlowPermissions.ReviewRequests, L("Permission:ReviewRequests"));
+        var review = requests.AddChild(PurchaseFlowPermissions.ReviewRequests, L("Permission:ReviewRequests"));
+        // 第二轮第 2 批：二级审批权限挂在“审批”下面，只有管理员角色被授予。
+        review.AddChild(PurchaseFlowPermissions.ApproveHighValue, L("Permission:ApproveHighValue"));
         myGroup.AddPermission(PurchaseFlowPermissions.ViewReceipts, L("Permission:ViewReceipts"));
         myGroup.AddPermission(PurchaseFlowPermissions.RegisterReceipts, L("Permission:RegisterReceipts"));
 

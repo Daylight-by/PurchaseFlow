@@ -57,7 +57,7 @@ public class PurchaseDashboardTests : PurchaseFlowEntityFrameworkCoreTestBase
                 await AddQuoteAsync(approved, "Approved-B", 650m, 6);
                 approved.SelectQuote(approvedQuote.Id, "价格更低");
                 approved.Submit();
-                approved.Approve();
+                approved.ApproveFirstLevel(Guid.NewGuid());
                 await _requests.UpdateAsync(approved, autoSave: true);
 
                 returned = await CreateRequestAsync(tenantId, "DASH-RETURNED", 1000m);
@@ -76,7 +76,7 @@ public class PurchaseDashboardTests : PurchaseFlowEntityFrameworkCoreTestBase
                 await AddQuoteAsync(otherTenantRequest, "Other-B", 110m, 2);
                 otherTenantRequest.SelectQuote(otherQuote.Id, "价格更低");
                 otherTenantRequest.Submit();
-                otherTenantRequest.Approve();
+                otherTenantRequest.ApproveFirstLevel(Guid.NewGuid());
                 await _requests.UpdateAsync(otherTenantRequest, autoSave: true);
             }
         });
@@ -120,7 +120,8 @@ public class PurchaseDashboardTests : PurchaseFlowEntityFrameworkCoreTestBase
                 await AddQuoteAsync(request, "Valid-B", 560m, 7);
                 request.SelectQuote(quote.Id, "价格更低");
                 request.Submit();
-                request.Approve();
+                // 第二轮第 2 批：金额 500 元 ≤ 5 万，一级批准即最终批准。
+                request.ApproveFirstLevel(Guid.NewGuid());
                 await _requests.UpdateAsync(request, autoSave: true);
             }
         });

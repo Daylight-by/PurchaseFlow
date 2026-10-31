@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using PurchaseFlow.Permissions;
+using PurchaseFlow.Purchasing;
 using Volo.Abp.Data;
 using Volo.Abp.DependencyInjection;
 using Volo.Abp.Guids;
@@ -40,14 +41,14 @@ public class DemoRoleDataSeedContributor : IDataSeedContributor, ITransientDepen
         // own roles and users without inheriting these sample accounts.
         if (context.TenantId.HasValue) return;
 
-        await EnsureRoleAsync("buyer", PurchaseFlowPermissions.EditRequests, canViewReceipts: true);
-        await EnsureRoleAsync("reviewer", PurchaseFlowPermissions.ReviewRequests, canViewReceipts: true);
-        await EnsureRoleAsync("receiver", PurchaseFlowPermissions.RegisterReceipts, canViewReceipts: true);
+        await EnsureRoleAsync("buyer");
+        await EnsureRoleAsync("reviewer");
+        await EnsureRoleAsync("receiver");
 
-        // 第二轮主数据：管理员（ABP 模板 IdentityDataSeeder 创建）同时拥有查看与维护权限；
-        // 业务角色只授予查看（see EnsureRoleAsync），避免演示账号误改档案。
-        await _permissionManager.SetForRoleAsync("admin", PurchaseFlowPermissions.MasterData, true);
-        await _permissionManager.SetForRoleAsync("admin", PurchaseFlowPermissions.ManageMasterData, true);
+        // 第二轮修复：演示角色的权限授予集中到 DemoPermissionGrants，
+        // 由部署种子和真实授权测试共用，避免“管理员漏授父权限 Requests”
+        // 这类问题只能在部署后被人工发现。
+        await DemoPermissionGrants.GrantAsync(_permissionManager);
 
         // Demo accounts are created unconditionally with well-known demo
         // passwords, so a freshly deployed instance is directly usable for
@@ -58,19 +59,13 @@ public class DemoRoleDataSeedContributor : IDataSeedContributor, ITransientDepen
             Environment.GetEnvironmentVariable("Demo__ReceiverPassword"));
     }
 
-    private async Task EnsureRoleAsync(string name, string actionPermission, bool canViewReceipts = false)
+    /// <summary>
+    /// 只负责创建角色；权限授予统一走 DemoPermissionGrants，避免两处口径漂移。
+    /// </summary>
+    private async Task EnsureRoleAsync(string name)
     {
         if (await _roleManager.FindByNameAsync(name) is null)
             EnsureSucceeded(await _roleManager.CreateAsync(new IdentityRole(_guidGenerator.Create(), name)));
-
-        await _permissionManager.SetForRoleAsync(name, PurchaseFlowPermissions.Requests, true);
-        await _permissionManager.SetForRoleAsync(name, actionPermission, true);
-        await _permissionManager.SetForRoleAsync(name, PurchaseFlowPermissions.ViewReceipts, canViewReceipts);
-        await _permissionManager.SetForRoleAsync(name, PurchaseFlowPermissions.RegisterReceipts,
-            string.Equals(actionPermission, PurchaseFlowPermissions.RegisterReceipts, StringComparison.Ordinal));
-        // 第二轮主数据：业务角色都能“查看”供应商/物料档案（用于报价与需求明细选择），
-        // 但不授予 ManageMasterData —— 维护权限只给管理员。
-        await _permissionManager.SetForRoleAsync(name, PurchaseFlowPermissions.MasterData, true);
     }
 
     private async Task EnsureUserAsync(string userName, string email, string role, string? password)

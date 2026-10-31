@@ -187,7 +187,8 @@ public class PurchaseRequestTests
         AddQuote(request, "南方轴承", 27m, 5);
         request.SelectQuote(quote.Id, "交付更快");
         request.Submit();
-        request.Approve();
+        // 第二轮第 2 批：审批拆成两级；该需求金额 255 元，一级批准即最终批准。
+        request.ApproveFirstLevel(Guid.NewGuid());
 
         Assert.Equal(PurchaseFlowErrors.NotEditable,
             Assert.Throws<BusinessException>(() => request.Submit()).Code);

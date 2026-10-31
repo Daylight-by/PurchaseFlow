@@ -183,6 +183,13 @@ public class PurchaseRequestSummaryDto
 
     public int LineCount { get; set; }
     public PurchaseRequestStatus Status { get; set; }
+
+    /// <summary>
+    /// 第二轮第 2 批：采购金额是否超过阈值、需要两级审批。
+    /// 页面据此展示“需二级审批”，应用层也用它决定一级批准后是否进入二级待审。
+    /// </summary>
+    public bool RequiresSecondApproval { get; set; }
+
     public Guid BuyerUserId { get; set; }
     public Guid? SelectedQuoteId { get; set; }
     public string? SelectionReason { get; set; }
@@ -206,6 +213,10 @@ public class PurchaseRequestListDto
     public int AllCount { get; set; }
     public int DraftCount { get; set; }
     public int PendingReviewCount { get; set; }
+
+    /// <summary>第二轮第 2 批：一级已批、等待二级审批的待办数。</summary>
+    public int PendingSecondApprovalCount { get; set; }
+
     public int ReturnedCount { get; set; }
     public int ApprovedCount { get; set; }
 }
@@ -215,6 +226,10 @@ public class PurchaseDashboardDto
     public int TotalCount { get; set; }
     public int DraftCount { get; set; }
     public int PendingReviewCount { get; set; }
+
+    /// <summary>第二轮第 2 批：等待二级审批的数量。</summary>
+    public int PendingSecondApprovalCount { get; set; }
+
     public int ReturnedCount { get; set; }
     public int ApprovedCount { get; set; }
     public int TotalQuoteCount { get; set; }
@@ -327,6 +342,9 @@ public class PurchaseOrderDto
 
 public class PurchaseRequestDetailDto : PurchaseRequestSummaryDto
 {
+    /// <summary>第二轮第 2 批：一级审批人；用于页面展示与“二级必须换人”的业务判断。</summary>
+    public Guid? FirstApproverUserId { get; set; }
+
     public decimal? SelectedQuoteAmount { get; set; }
     public decimal? ExpectedGrossProfit { get; set; }
     public decimal? SelectedCostPremiumToLowest { get; set; }

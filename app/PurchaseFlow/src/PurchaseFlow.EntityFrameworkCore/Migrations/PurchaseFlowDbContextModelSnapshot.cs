@@ -412,6 +412,9 @@ namespace PurchaseFlow.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("ExtraProperties");
 
+                    b.Property<Guid?>("FirstApproverUserId")
+                        .HasColumnType("TEXT");
+
                     b.Property<bool>("IsDeleted")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER")
