@@ -3,6 +3,7 @@ using System.IO;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Extensions.DependencyInjection;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Localization;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -204,6 +205,24 @@ public class PurchaseFlowWebModule : AbpModule
     {
         var app = context.GetApplicationBuilder();
         var env = context.GetEnvironment();
+
+        // 为什么放在最前面：容器平台的健康检查请求的是 /healthz，
+        // 如果这个地址没有专门处理，请求会被本地化/租户/登录重定向成 302，
+        // 平台就判定容器“不健康”并把任务换掉，部署会以
+        // “no RUNNING task on the new task definition” 失败。
+        // 这里直接短路返回 200，不走任何重定向与鉴权。
+        app.Use(async (context2, next) =>
+        {
+            if (context2.Request.Path.Equals("/healthz", StringComparison.OrdinalIgnoreCase))
+            {
+                context2.Response.StatusCode = StatusCodes.Status200OK;
+                context2.Response.ContentType = "text/plain; charset=utf-8";
+                await context2.Response.WriteAsync("ok");
+                return;
+            }
+
+            await next();
+        });
 
         if (env.IsDevelopment())
         {
